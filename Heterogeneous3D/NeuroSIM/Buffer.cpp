@@ -96,11 +96,13 @@ void Buffer::CalculateArea(double _newHeight, double _newWidth, AreaModify _opti
 			wlDecoder.CalculateArea(lengthCol, NULL, NONE);
 			precharger.CalculateArea(NULL, lengthRow, NONE);
 			sramWriteDriver.CalculateArea(NULL, lengthRow, NONE);
+			
 			area += memoryArea + wlDecoder.area + precharger.area + sramWriteDriver.area;
 		} else {
 			dff.CalculateArea(NULL, NULL, NONE);
 			wlDecoder.CalculateArea(dff.hDff*ceil((double)numBit/(double)interface_width), NULL, NONE);
 			area += dff.area + wlDecoder.area;
+			// cout<<dff.area<<" "<<wlDecoder.area<<endl;s
 		}
 
 		if (_newWidth && _option==NONE) {

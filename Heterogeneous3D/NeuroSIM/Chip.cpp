@@ -106,6 +106,9 @@ vector<int> ChipDesignInitialize(InputParameter& inputParameter, Technology& tec
 	*numPENM = 0;
 
 	vector<int> markNM;
+
+	if(param->digital) return markNM;	//数字无需进行floorplan
+
 	if (param->novelMapping) {
 		// define number of PE in COV layers
 		int most = 0;
@@ -376,35 +379,43 @@ void ChipInitialize(InputParameter& inputParameter, Technology& tech, Technology
 	double maxLayerInput = 0;
 	// find max # tiles needed to be added at the same time
 	double maxTileAdded = 0;
-	for (int i=0; i<netStructure.size(); i++) {
-		double input = netStructure[i][0]*netStructure[i][1]*netStructure[i][2];  // IFM_Row * IFM_Column * IFM_depth
-		if (! param->pipeline) {
-			if (input > maxLayerInput) {
-				maxLayerInput = input;
-			}
-			if (markNM[i] == 0) {
-				globalBusWidth += (desiredTileSizeCM)+(desiredTileSizeCM)/param->numColMuxed;
+
+	if(!param->digital){
+		for (int i=0; i<netStructure.size(); i++) {
+			double input = netStructure[i][0]*netStructure[i][1]*netStructure[i][2];  // IFM_Row * IFM_Column * IFM_depth
+			if (! param->pipeline) {
+				if (input > maxLayerInput) {
+					maxLayerInput = input;
+				}
+				if (markNM[i] == 0) {
+					globalBusWidth += (desiredTileSizeCM)+(desiredTileSizeCM)/param->numColMuxed;
+				} else {
+					globalBusWidth += (desiredPESizeNM)*ceil((double)sqrt(numPENM))+(desiredPESizeNM)*ceil((double)sqrt(numPENM))/param->numColMuxed;
+				}
 			} else {
-				globalBusWidth += (desiredPESizeNM)*ceil((double)sqrt(numPENM))+(desiredPESizeNM)*ceil((double)sqrt(numPENM))/param->numColMuxed;
+				maxLayerInput += netStructure[i][0]*netStructure[i][1]*netStructure[i][2]/2;
+				if (markNM[i] == 0) {
+					globalBusWidth += ((desiredTileSizeCM)+(desiredTileSizeCM)/param->numColMuxed)*numTileEachLayer[0][i]*numTileEachLayer[1][i];
+				} else {
+					globalBusWidth += ((desiredPESizeNM)*ceil((double)sqrt(numPENM))+(desiredPESizeNM)*ceil((double)sqrt(numPENM))/param->numColMuxed)*numTileEachLayer[0][i]*numTileEachLayer[1][i];
+				}
 			}
-		} else {
-			maxLayerInput += netStructure[i][0]*netStructure[i][1]*netStructure[i][2]/2;
-			if (markNM[i] == 0) {
-				globalBusWidth += ((desiredTileSizeCM)+(desiredTileSizeCM)/param->numColMuxed)*numTileEachLayer[0][i]*numTileEachLayer[1][i];
-			} else {
-				globalBusWidth += ((desiredPESizeNM)*ceil((double)sqrt(numPENM))+(desiredPESizeNM)*ceil((double)sqrt(numPENM))/param->numColMuxed)*numTileEachLayer[0][i]*numTileEachLayer[1][i];
-			}
-		}
-	
 		
-		if (numTileEachLayer[0][i] > maxTileAdded) {
-			maxTileAdded = numTileEachLayer[0][i];
+			
+			if (numTileEachLayer[0][i] > maxTileAdded) {
+				maxTileAdded = numTileEachLayer[0][i];
+			}
+		}
+		// have to limit the global bus width --> cannot grow dramatically with num of tile
+		while (globalBusWidth > param->maxGlobalBusWidth) {
+			globalBusWidth /= 2;
 		}
 	}
-	// have to limit the global bus width --> cannot grow dramatically with num of tile
-	while (globalBusWidth > param->maxGlobalBusWidth) {
-		globalBusWidth /= 2;
+	else{
+		//TODO如何选定global bus的带宽
+		globalBusWidth = param->maxGlobalBusWidth;//目前设置为最大带宽
 	}
+	
 	
 	// define bufferSize for inference operation
 	int bufferSize = param->numBitInput*maxLayerInput;										 
@@ -532,23 +543,32 @@ vector<double> ChipCalculateArea(InputParameter& inputParameter, Technology& tec
 		areaArray += NMTileAreaArray*desiredNumTileNM;
 		*NMTileheight = NMheight;
 		*NMTilewidth = NMwidth;
+
+		if(param->debug){
+			cout<<"-----------------Chip area composition------------"<<endl;
+			cout<<"Single Tile area: "<<NMTileArea*1e6<<"mm^2"<<endl;
+			cout<<"Total Tile area: "<<NMTileArea*desiredNumTileNM*1e6<<"mm^2"<<endl;
+		}
 	}
-	areaCMTile = TileCalculateArea(pow(ceil((double) desiredTileSizeCM/(double) desiredPESizeCM), 2), desiredPESizeCM, false, &CMheight, &CMwidth);
+	else{
+		areaCMTile = TileCalculateArea(pow(ceil((double) desiredTileSizeCM/(double) desiredPESizeCM), 2), desiredPESizeCM, false, &CMheight, &CMwidth);
 	
-	double CMTileArea = areaCMTile[0];
-	double CMTileAreaIC = areaCMTile[1];
-	double CMTileAreaADC = areaCMTile[2];
-	double CMTileAreaAccum = areaCMTile[3];
-	double CMTileAreaOther = areaCMTile[4];
-	double CMTileAreaArray = areaCMTile[5];
-	area += CMTileArea*desiredNumTileCM;
-	areaIC += CMTileAreaIC*desiredNumTileCM;
-	areaADC += CMTileAreaADC*desiredNumTileCM;
-	areaAccum += CMTileAreaAccum*desiredNumTileCM;
-	areaOther += CMTileAreaOther*desiredNumTileCM;
-	areaArray += CMTileAreaArray*desiredNumTileCM;
-	*CMTileheight = CMheight;
-	*CMTilewidth = CMwidth;
+		double CMTileArea = areaCMTile[0];
+		double CMTileAreaIC = areaCMTile[1];
+		double CMTileAreaADC = areaCMTile[2];
+		double CMTileAreaAccum = areaCMTile[3];
+		double CMTileAreaOther = areaCMTile[4];
+		double CMTileAreaArray = areaCMTile[5];
+		area += CMTileArea*desiredNumTileCM;
+		areaIC += CMTileAreaIC*desiredNumTileCM;
+		areaADC += CMTileAreaADC*desiredNumTileCM;
+		areaAccum += CMTileAreaAccum*desiredNumTileCM;
+		areaOther += CMTileAreaOther*desiredNumTileCM;
+		areaArray += CMTileAreaArray*desiredNumTileCM;
+		*CMTileheight = CMheight;
+		*CMTilewidth = CMwidth;
+	}
+	
 	
 	// global buffer is made up by multiple cores
 	globalBuffer->CalculateArea(numTileRow*max(NMheight, CMheight), NULL, NONE);
@@ -591,6 +611,15 @@ vector<double> ChipCalculateArea(InputParameter& inputParameter, Technology& tec
 		areaResults.push_back(tsvPath->area);
 	}
 	
+	if(param->debug){
+			cout<<"globalBuffer: "<<globalBuffer->area*1e6<<"mm^2"<<endl;
+			cout<<"GhTree: "<<GhTree->area*1e6<<"mm^2"<<endl;
+			cout<<"maxPool: "<<maxPool->area*1e6<<"mm^2"<<endl;
+			cout<<"Gaccumulation: "<<Gaccumulation->area*1e6<<"mm^2"<<endl;
+			cout<<"GreLu: "<<GreLu->area*1e6<<"mm^2"<<endl;
+			cout<<"Gsigmoid: "<<Gsigmoid->area*1e6<<"mm^2"<<endl;
+	}
+
 	*height = sqrt(area);
 	*width = area/(*height);
 	

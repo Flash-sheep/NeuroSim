@@ -275,18 +275,26 @@ void SubArray::Initialize(int _numRow, int _numCol, double _unitWireRes){  //ini
 				mux.Initialize(ceil(numCol/numColMuxed), numColMuxed, resTg, FPGA);       
 				muxDecoder.Initialize(REGULAR_ROW, (int)ceil(log2(numColMuxed)), true, false);
 			}
-			if (SARADC) {
-				sarADC.Initialize(numCol/numColMuxed, levelOutput, clkFreq, numReadCellPerOperationNeuro);
-			} else {
+
+			if(!param->digital){ //在数字计算下只需要senseAmp
+				if (SARADC) {
+					sarADC.Initialize(numCol/numColMuxed, levelOutput, clkFreq, numReadCellPerOperationNeuro);
+				} else {
+					multilevelSenseAmp.Initialize(numCol/numColMuxed, levelOutput, clkFreq, numReadCellPerOperationNeuro, true, currentMode);
+					multilevelSAEncoder.Initialize(levelOutput, numCol/numColMuxed);
+				}			
+				if (numCellPerSynapse > 1) {						  
+					shiftAddWeight.Initialize(ceil(numCol/numColMuxed), log2(levelOutput), clkFreq, spikingMode, numCellPerSynapse);
+				}
+				if (numReadPulse > 1) {
+					shiftAddInput.Initialize(ceil(numCol/numColMuxed), log2(levelOutput)+numCellPerSynapse, clkFreq, spikingMode, numReadPulse);
+				}
+			}
+			else{ //TODO 修改Multilevel为sense，但是会有bug
 				multilevelSenseAmp.Initialize(numCol/numColMuxed, levelOutput, clkFreq, numReadCellPerOperationNeuro, true, currentMode);
 				multilevelSAEncoder.Initialize(levelOutput, numCol/numColMuxed);
-			}			
-			if (numCellPerSynapse > 1) {						  
-				shiftAddWeight.Initialize(ceil(numCol/numColMuxed), log2(levelOutput), clkFreq, spikingMode, numCellPerSynapse);
 			}
-			if (numReadPulse > 1) {
-				shiftAddInput.Initialize(ceil(numCol/numColMuxed), log2(levelOutput)+numCellPerSynapse, clkFreq, spikingMode, numReadPulse);
-			}
+			
 			
 		} else if (BNNsequentialMode || XNORsequentialMode) {       
 			double resTg = cell.resMemCellOn;
@@ -495,19 +503,26 @@ void SubArray::CalculateArea() {  //calculate layout area for total design
 					double minMuxHeight = MAX(muxDecoder.height, mux.height);
 					mux.CalculateArea(minMuxHeight, widthArray, OVERRIDE);
 				}
-				if (SARADC) {
-					sarADC.CalculateUnitArea();
-					sarADC.CalculateArea(NULL, widthArray, NONE);
-				} else {
+				if(!param->digital){
+					if (SARADC) {
+						sarADC.CalculateUnitArea();
+						sarADC.CalculateArea(NULL, widthArray, NONE);
+					} else {
+						multilevelSenseAmp.CalculateArea(NULL, widthArray, NONE);
+						multilevelSAEncoder.CalculateArea(NULL, widthArray, NONE);
+					}
+					if (numReadPulse > 1) {
+						shiftAddInput.CalculateArea(NULL, widthArray, NONE);
+					}
+					if (numCellPerSynapse > 1) {
+						shiftAddWeight.CalculateArea(NULL, widthArray, NONE);
+					}
+				}
+				else{
 					multilevelSenseAmp.CalculateArea(NULL, widthArray, NONE);
 					multilevelSAEncoder.CalculateArea(NULL, widthArray, NONE);
 				}
-				if (numReadPulse > 1) {
-					shiftAddInput.CalculateArea(NULL, widthArray, NONE);
-				}
-				if (numCellPerSynapse > 1) {
-					shiftAddWeight.CalculateArea(NULL, widthArray, NONE);
-				}
+				
 				height = ((cell.writeVoltage > 1.5)==true? (sllevelshifter.height):0) + slSwitchMatrix.height + heightArray + ((numColMuxed > 1)==true? (mux.height):0) + multilevelSenseAmp.height + multilevelSAEncoder.height + shiftAddWeight.height + shiftAddInput.height + sarADC.height;
 				width = MAX( ((cell.writeVoltage > 1.5)==true? (wllevelshifter.width + bllevelshifter.width):0) + wlNewSwitchMatrix.width + wlSwitchMatrix.width, ((numColMuxed > 1)==true? (muxDecoder.width):0)) + widthArray;
 				usedArea = areaArray + ((cell.writeVoltage > 1.5)==true? (wllevelshifter.area + bllevelshifter.area + sllevelshifter.area):0) + wlSwitchMatrix.area + wlNewSwitchMatrix.area + slSwitchMatrix.area + 
@@ -519,6 +534,17 @@ void SubArray::CalculateArea() {  //calculate layout area for total design
 				
 				area = height * width;				
 				emptyArea = area - usedArea;
+
+				areaArray+=areaOther; //TODO 这里将switchmatrix算进了阵列面积，因为tsv与PE数量对应而不与subarray数量对应
+				if(param->debug){
+					cout<<"-----------------Subarray area composition------------"<<endl;
+					cout<<"areaArray: "<<areaArray*1e6<<"mm^2"<<endl;
+					cout<<"areaADC: "<<areaADC*1e6<<"mm^2"<<endl;
+					cout<<"areaAccum: "<<areaAccum*1e6<<"mm^2"<<endl;
+					cout<<"areaOther: "<<areaOther*1e6<<"mm^2"<<endl;
+					cout<<"usedArea: "<<usedArea*1e6<<"mm^2"<<endl;
+				}
+
 			} else if (BNNsequentialMode || XNORsequentialMode) {    
 				wlDecoder.CalculateArea(heightArray, NULL, NONE);
 				if (cell.accessType == CMOS_access) {

@@ -55,6 +55,14 @@ using namespace std;
 
 Param::Param() {
 	/***************************************** user defined design options and parameters *****************************************/
+
+	debug = 1;
+
+	digital = 1;				// 0: analog computing
+								// 1: digital computing
+
+	
+
 	operationmode = 2;     		// 1: conventionalSequential (Use several multi-bit RRAM as one synapse)
 								// 2: conventionalParallel (Use several multi-bit RRAM as one synapse)
 	
@@ -62,7 +70,7 @@ Param::Param() {
 								// 2: cell.memCellType = Type::RRAM
 								// 3: cell.memCellType = Type::FeFET
 	
-	accesstype = 1;         	// 1: cell.accessType = CMOS_access
+	accesstype = 4;         	// 1: cell.accessType = CMOS_access
 								// 2: cell.accessType = BJT_access
 								// 3: cell.accessType = diode_access
 								// 4: cell.accessType = none_access (Crossbar Array)
@@ -101,7 +109,7 @@ Param::Param() {
 	
 	pipeline = false;            // false: layer-by-layer process --> huge leakage energy in HP
 								// true: pipeline process
-	speedUpDegree = 8;          // 1 = no speed up --> original speed
+	speedUpDegree = 1;          // 1 = no speed up --> original speed
 								// 2 and more : speed up ratio, the higher, the faster
 								// A speed-up degree upper bound: when there is no idle period during each layer --> no need to further fold the system clock
 								// This idle period is defined by IFM sizes and data flow, the actual process latency of each layer may be different due to extra peripheries
@@ -109,7 +117,7 @@ Param::Param() {
 	validated = true;			// false: no calibration factors
 								// true: validated by silicon data (wiring area in layout, gate switching activity, post-layout performance drop...)
 								
-	synchronous = true;			// false: asynchronous
+	synchronous = false;			// false: asynchronous
 								// true: synchronous, clkFreq will be decided by sensing delay
 	
 	H3D = true;                 // false: conventional 2D
@@ -129,18 +137,19 @@ Param::Param() {
 	// technode: 32      --> wireWidth: 56
 	// technode: 22      --> wireWidth: 40
 	// technode: 14      --> wireWidth: 25
-	// technode: 10, 7   --> wireWidth: 18
-	technode = 22;                      // Technology
-	featuresize = 40e-9;                // Wire width for subArray simulation
+	// technode: 10, 7   --> wireWidth: 18e
+	technode = 32;                      // Technology
+	featuresize = 14e-9;                // Wire width for subArray simulation TODO 这里40nm太大了，修改为24nm
+
 	
 	/* for Heterogeneous 3D */
 	deviceroadmapTop = 2;  
-	technodeTop = 22;
+	technodeTop = 14;
 	featuresizeTop = 40e-9;
 	deviceroadmapBottom = 2; 
 	technodeBottom = 7;
 	featuresizeBottom = 18e-9;
-	numMemTier = 4;
+	numMemTier = 8;
 	tsvPitch = 1.7e-6;
 	tsvRes = 0.3;
 	tsvCap = 20e-15;
@@ -153,16 +162,16 @@ Param::Param() {
 										// NOTE: Carefully choose this number!!!
 										// e.g. when use pipeline with high speedUpDegree, i.e. high throughput, need to increase the global bus width (interface of global buffer) --> guarantee global buffer speed
 
-	numRowSubArray = 128;               // # of rows in single subArray
-	numColSubArray = 128;               // # of columns in single subArray
+	numRowSubArray = 1024;               // # of rows in single subArray
+	numColSubArray = 1280;               // # of columns in single subArray
 	
 	/*** option to relax subArray layout ***/
 	relaxArrayCellHeight = 0;           // relax ArrayCellHeight or not
 	relaxArrayCellWidth = 0;            // relax ArrayCellWidth or not
 	
 	numColMuxed = 8;                    // How many columns share 1 ADC (for eNVM and FeFET) or parallel SRAM
-	levelOutput = 32;                   // # of levels of the multilevelSenseAmp output, should be in 2^N forms; e.g. 32 levels --> 5-bit ADC
-	cellBit = 2;                        // precision of memory device 
+	levelOutput = 2;                   // # of levels of the multilevelSenseAmp output, should be in 2^N forms; e.g. 32 levels --> 5-bit ADC
+	cellBit = 1;                        // precision of memory device 
 	
 	/*** parameters for SRAM ***/
 	// due the scaling, suggested SRAM cell size above 22nm: 160F^2
@@ -191,7 +200,7 @@ Param::Param() {
 	readPulseWidth = 10e-9;             // read pulse width in sec
 	accessVoltage = 1.1;                // Gate voltage for the transistor in 1T1R
 	resistanceAccess = resistanceOn*IR_DROP_TOLERANCE;            // resistance of access CMOS in 1T1R
-	writeVoltage = 2;					// Enable level shifer if writeVoltage > 1.5V
+	writeVoltage = 1;					// Enable level shifer if writeVoltage > 1.5V
 	
 	/*** Calibration parameters ***/
 	if(validated){

@@ -191,6 +191,7 @@ void TileInitialize(InputParameter& inputParameter, Technology& tech, Technology
 			}
 		}
 		numInBufferCore = ceil((numPENM*param->numBitInput*param->numRowSubArray)/(param->tileBufferCoreSizeRow*param->tileBufferCoreSizeCol));
+
 		
 		if ((numPENM*param->numBitInput*param->numRowSubArray) < (param->tileBufferCoreSizeRow*param->tileBufferCoreSizeCol)) {
 			inputBufferNM->Initialize(numPENM*param->numBitInput*param->numRowSubArray, numPENM*param->numRowSubArray, 1, param->unitLengthWireResistance, param->clkFreq, param->peBufferType);
@@ -198,7 +199,8 @@ void TileInitialize(InputParameter& inputParameter, Technology& tech, Technology
 			inputBufferNM->Initialize((param->tileBufferCoreSizeRow*param->tileBufferCoreSizeCol), param->tileBufferCoreSizeCol, 1, param->unitLengthWireResistance, param->clkFreq, param->peBufferType);
 		}
 		hTreeNM->Initialize(numPENM, numPENM, param->localBusDelayTolerance, numPENM*param->numRowSubArray, param->clkFreq);
-	} 
+	}
+	else{ 
 	if (param->parallelRead) {
 		accumulationCM->Initialize(numPECM, ceil((double)log2((double)param->levelOutput))+param->numBitInput+param->numColPerSynapse+1+ceil((double)log2((double)peSizeCM/(double)param->numRowSubArray)), 
 								ceil((double)numPECM*(double)param->numColSubArray/(double)param->numColMuxed), param->clkFreq);
@@ -255,12 +257,14 @@ void TileInitialize(InputParameter& inputParameter, Technology& tech, Technology
 	}
 	numInBufferCore = ceil((numPECM*param->numBitInput*param->numRowSubArray)/(param->tileBufferCoreSizeRow*param->tileBufferCoreSizeCol));
 	
+
 	if ((numPECM*param->numBitInput*param->numRowSubArray) < (param->tileBufferCoreSizeRow*param->tileBufferCoreSizeCol)) {
 		inputBufferCM->Initialize(numPECM*param->numBitInput*param->numRowSubArray, numPECM*param->numRowSubArray, 1, param->unitLengthWireResistance, param->clkFreq, param->peBufferType);
 	} else {
 		inputBufferCM->Initialize((param->tileBufferCoreSizeRow*param->tileBufferCoreSizeCol), param->tileBufferCoreSizeCol, 1, param->unitLengthWireResistance, param->clkFreq, param->peBufferType);
 	}
 	hTreeCM->Initialize(numPECM, numPECM, param->localBusDelayTolerance, numPECM*param->numRowSubArray, param->clkFreq);
+}
 }
 
 vector<double> TileCalculateArea(double numPE, double peSize, bool NMTile, double *height, double *width) {
@@ -274,13 +278,17 @@ vector<double> TileCalculateArea(double numPE, double peSize, bool NMTile, doubl
 	double areasigmoid = 0;
 	
 	if (NMTile) {
-		int numSubArray = ceil((double) peSize/(double) param->numRowSubArray)*ceil((double) peSize/(double) param->numColSubArray);
-		peAreaResults = ProcessingUnitCalculateArea(subArrayInPE, ceil((double)sqrt((double)numSubArray)), ceil((double)sqrt((double)numSubArray)), true, &PEheight, &PEwidth, &PEbufferArea);
+
+		int numSubArray = param->numRowArrayForPE*param->numColArrayForPE;
+		peAreaResults = ProcessingUnitCalculateArea(subArrayInPE, param->numRowArrayForPE, param->numColArrayForPE, true, &PEheight, &PEwidth, &PEbufferArea);
 		double PEarea = peAreaResults[0];
 		double PEareaADC = peAreaResults[1];
 		double PEareaAccum = peAreaResults[2];
 		double PEareaOther = peAreaResults[3];
 		double PEareaArray = peAreaResults[4];
+
+	
+
 		accumulationNM->CalculateArea(NULL, ceil(sqrt((double)numPE))*PEwidth, NONE);
 		if (!param->chipActivation) {
 			if (param->reLu) {
@@ -302,6 +310,18 @@ vector<double> TileCalculateArea(double numPE, double peSize, bool NMTile, doubl
 
 		area += PEarea*numPE + accumulationNM->area + inputBufferNM->area + outputBufferNM->area + hTreeNM->area;
 		
+		if(param->debug){
+			cout<<"-----------------Tile area composition------------"<<endl;
+			cout<<"Single PE area: "<<PEarea*1e6<<"mm^2"<<endl;
+			cout<<"Total PE area: "<<PEarea*numPE*1e6<<"mm^2"<<endl;
+			cout<<"accumulationNM: "<<accumulationNM->area*1e6<<"mm^2"<<endl;
+			if(reLuNM) cout<<"reLuNM: "<<reLuNM->area*1e6<<"mm^2"<<endl;
+			if(sigmoidNM) cout<<"sigmoidNM: "<<sigmoidNM->area*1e6<<"mm^2"<<endl;
+			cout<<"inputBufferNM: "<<inputBufferNM->area*1e6<<"mm^2"<<endl;
+			cout<<"outputBufferNM: "<<outputBufferNM->area*1e6<<"mm^2"<<endl;
+			cout<<"hTreeNM: "<<hTreeNM->area*1e6<<"mm^2"<<endl;
+		}
+
 		*height = sqrt(area);
 		*width = area/(*height);
 		

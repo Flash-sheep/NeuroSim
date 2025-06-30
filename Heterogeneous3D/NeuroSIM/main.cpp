@@ -67,12 +67,24 @@ int main(int argc, char * argv[]) {
 	gen.seed(0);
 	
 	vector<vector<double> > netStructure;
-	netStructure = getNetStructure(argv[1]);
+
+	if(!param->digital)
+		netStructure = getNetStructure(argv[1]);
 	
 	// define weight/input/memory precision from wrapper
-	param->synapseBit = atoi(argv[2]);              // precision of synapse weight
-	param->numBitInput = atoi(argv[3]);             // precision of input neural activation
-	param->temp = atoi(argv[4]);                    // chip operation temperature
+
+	if(!param->digital){
+		param->synapseBit = atoi(argv[2]);              // precision of synapse weight
+		param->numBitInput = atoi(argv[3]);             // precision of input neural activation
+		param->temp = atoi(argv[4]);                    // chip operation temperature
+	}
+	else{
+		param->synapseBit = 16;              // precision of synapse weight
+		param->numBitInput = 16;             // precision of input neural activation
+		param->temp = 300;                    // chip operation temperature
+	}
+	
+
 	if (param->cellBit > param->synapseBit) {
 		cout << "ERROR!: Memory precision is even higher than synapse precision, please modify 'cellBit' in Param.cpp!" << endl;
 		param->cellBit = param->synapseBit;
@@ -114,8 +126,12 @@ int main(int argc, char * argv[]) {
 		double maxPESizeNM, maxTileSizeCM, numPENM;
 		vector<int> markNM;
 		vector<int> pipelineSpeedUp;
+
+
 		markNM = ChipDesignInitialize(inputParameter, tech, techTop, techBottom, cell, false, netStructure, &maxPESizeNM, &maxTileSizeCM, &numPENM);
 		pipelineSpeedUp = ChipDesignInitialize(inputParameter, tech, techTop, techBottom, cell, true, netStructure, &maxPESizeNM, &maxTileSizeCM, &numPENM);
+		
+		
 		
 		double desiredNumTileNM, desiredPESizeNM, desiredNumTileCM, desiredTileSizeCM, desiredPESizeCM;
 		int numTileRow, numTileCol;
@@ -124,31 +140,57 @@ int main(int argc, char * argv[]) {
 		vector<vector<double> > utilizationEachLayer;
 		vector<vector<double> > speedUpEachLayer;
 		vector<vector<double> > tileLocaEachLayer;
+
+		double numComputation = 0;
 		
-		numTileEachLayer = ChipFloorPlan(true, false, false, netStructure, markNM, 
+		if(!param->digital){
+			numTileEachLayer = ChipFloorPlan(true, false, false, netStructure, markNM, 
 						maxPESizeNM, maxTileSizeCM, numPENM, pipelineSpeedUp,
 						&desiredNumTileNM, &desiredPESizeNM, &desiredNumTileCM, &desiredTileSizeCM, &desiredPESizeCM, &numTileRow, &numTileCol);	
 		
-		utilizationEachLayer = ChipFloorPlan(false, true, false, netStructure, markNM, 
-						maxPESizeNM, maxTileSizeCM, numPENM, pipelineSpeedUp,
-						&desiredNumTileNM, &desiredPESizeNM, &desiredNumTileCM, &desiredTileSizeCM, &desiredPESizeCM, &numTileRow, &numTileCol);
-		
-		speedUpEachLayer = ChipFloorPlan(false, false, true, netStructure, markNM,
-						maxPESizeNM, maxTileSizeCM, numPENM, pipelineSpeedUp,
-						&desiredNumTileNM, &desiredPESizeNM, &desiredNumTileCM, &desiredTileSizeCM, &desiredPESizeCM, &numTileRow, &numTileCol);
-						
-		tileLocaEachLayer = ChipFloorPlan(false, false, false, netStructure, markNM,
-						maxPESizeNM, maxTileSizeCM, numPENM, pipelineSpeedUp,
-						&desiredNumTileNM, &desiredPESizeNM, &desiredNumTileCM, &desiredTileSizeCM, &desiredPESizeCM, &numTileRow, &numTileCol);
-		
-		double numComputation = 0;
-		for (int i=0; i<netStructure.size(); i++) {
-			numComputation += 2*(netStructure[i][0] * netStructure[i][1] * netStructure[i][2] * netStructure[i][3] * netStructure[i][4] * netStructure[i][5]);
+			utilizationEachLayer = ChipFloorPlan(false, true, false, netStructure, markNM, 
+							maxPESizeNM, maxTileSizeCM, numPENM, pipelineSpeedUp,
+							&desiredNumTileNM, &desiredPESizeNM, &desiredNumTileCM, &desiredTileSizeCM, &desiredPESizeCM, &numTileRow, &numTileCol);
+			
+			speedUpEachLayer = ChipFloorPlan(false, false, true, netStructure, markNM,
+							maxPESizeNM, maxTileSizeCM, numPENM, pipelineSpeedUp,
+							&desiredNumTileNM, &desiredPESizeNM, &desiredNumTileCM, &desiredTileSizeCM, &desiredPESizeCM, &numTileRow, &numTileCol);
+							
+			tileLocaEachLayer = ChipFloorPlan(false, false, false, netStructure, markNM,
+							maxPESizeNM, maxTileSizeCM, numPENM, pipelineSpeedUp,
+							&desiredNumTileNM, &desiredPESizeNM, &desiredNumTileCM, &desiredTileSizeCM, &desiredPESizeCM, &numTileRow, &numTileCol);
+			
+			
+			for (int i=0; i<netStructure.size(); i++) {
+				numComputation += 2*(netStructure[i][0] * netStructure[i][1] * netStructure[i][2] * netStructure[i][3] * netStructure[i][4] * netStructure[i][5]);
+			}
 		}
+		else{
+			// 手动指定各个层级
+			param->numMemTier = 8;//8层内存存储die
+			numTileRow = 4;
+			numTileCol = 4;
+			// desiredNumTileCM = 16;
+			desiredNumTileNM = 16;
+			numPENM = 8; //NM架构能指定PE的数量，考虑修改为NM
 
+			param->numRowArrayForPE = 16;
+			param->numColArrayForPE = 16;
+			desiredPESizeNM = 1280*param->numRowArrayForPE;
+			// desiredPESizeCM =  1280*16;//按照subarray的最大边为1280来给 一个pe包含256个subarray
+			// desiredTileSizeCM = desiredPESizeCM*3; //PE的数量为8，但是由于neuroSim中默认均为长宽相同，因此设置为9个？
+
+			desiredNumTileCM = 0;
+			desiredTileSizeCM = 0;
+			desiredPESizeCM = 0;
+		}
+		
+		if(param->debug) cout<<"initialize started"<<endl;
 		ChipInitialize(inputParameter, tech, techTop, techBottom, cell, netStructure, markNM, numTileEachLayer,
 						numPENM, desiredNumTileNM, desiredPESizeNM, desiredNumTileCM, desiredTileSizeCM, desiredPESizeCM, numTileRow, numTileCol);
-				
+		
+		if(param->debug) cout<<"initialize finished"<<endl;
+
 		double chipHeight, chipWidth, chipArea, chipAreaIC, chipAreaADC, chipAreaAccum, chipAreaOther, chipAreaArray;
 		double CMTileheight = 0;
 		double CMTilewidth = 0;
@@ -165,74 +207,117 @@ int main(int argc, char * argv[]) {
 		chipAreaOther = chipAreaResults[4];
 		chipAreaArray = chipAreaResults[5];
 		
+		cout<<"2D ChipArea is: "<<chipArea*1e6<<"mm^2"<<endl;
+		
 		double tsvArea = 0;
 		vector<int> tierLocationEachLayer;
 		if (param->H3D) {
-			int maxLayer = 0;
-			int maxLayerSize = 0;
-			int numArrayLayer = 0;
-			int totalNumArray = 0;
-			vector<int> numArrayEachLayer;
-			for (int i=0; i<netStructure.size(); i++) {
-				if (maxLayerSize <= numTileEachLayer[0][i] * numTileEachLayer[1][i]) {
-					maxLayerSize = numTileEachLayer[0][i] * numTileEachLayer[1][i];
-					maxLayer = i;
+			if(!param->digital){
+				int maxLayer = 0;
+				int maxLayerSize = 0;
+				int numArrayLayer = 0;
+				int totalNumArray = 0;
+				vector<int> numArrayEachLayer;
+				for (int i=0; i<netStructure.size(); i++) {
+					if (maxLayerSize <= numTileEachLayer[0][i] * numTileEachLayer[1][i]) {
+						maxLayerSize = numTileEachLayer[0][i] * numTileEachLayer[1][i];
+						maxLayer = i;
+					}
+					numArrayLayer = (numTileEachLayer[0][i] * numTileEachLayer[1][i] * (markNM[i]==0? pow(desiredTileSizeCM,2):(pow(desiredPESizeNM,2)*numPENM)) / (param->numRowSubArray*param->numColSubArray));
+					totalNumArray += numArrayLayer;
+					numArrayEachLayer.push_back(numArrayLayer);
 				}
-				numArrayLayer = (numTileEachLayer[0][i] * numTileEachLayer[1][i] * (markNM[i]==0? pow(desiredTileSizeCM,2):(pow(desiredPESizeNM,2)*numPENM)) / (param->numRowSubArray*param->numColSubArray));
-				totalNumArray += numArrayLayer;
-				numArrayEachLayer.push_back(numArrayLayer);
+				int desiredBottomSize;
+				if (markNM[maxLayer] ==0) {
+					desiredBottomSize = numTileEachLayer[0][maxLayer] * numTileEachLayer[1][maxLayer] * desiredTileSizeCM;
+				} else {
+					desiredBottomSize = numTileEachLayer[0][maxLayer] * numTileEachLayer[1][maxLayer] * desiredPESizeNM * numPENM;
+				}
+				int numArrayEachTier = ceil(totalNumArray/param->numMemTier);
+				chipAreaArray *= (double) numArrayEachTier/totalNumArray;
+				double chipGlobalLogic = chipAreaResults[6];
+				double chip2DArea = chipArea;
+				// define number of TSV according to number of array and array size at each tier
+				tsvArea = numArrayEachTier*chipAreaResults[7];
+				chipArea = tsvArea+ MAX(chipAreaArray, ((chipArea-chipAreaArray-chipGlobalLogic)*(desiredBottomSize/(desiredNumTileNM*numPENM*desiredPESizeNM+desiredNumTileCM*desiredTileSizeCM))+chipGlobalLogic));
+				chipAreaIC *= chipArea/chip2DArea;
+				
+				
+				// find each layer at which tier
+				int thisNumArray = 0;
+				for (int i=0; i<netStructure.size(); i++) {
+					thisNumArray += numArrayEachLayer[i];
+					tierLocationEachLayer.push_back(MIN(ceil(thisNumArray/numArrayEachTier)+1, param->numMemTier)); 
+				}
+				
+				cout << "------------------------------ Heterogeneous 3D FloorPlan --------------------------------" <<  endl;
+				cout << endl;
+				cout << "For layer-by-layer scheme, we assumed multiple memory tiers (like memory cube) on top of a logic tier (at bottom)" << endl;
+				cout << endl;
+				cout << "User-defined SubArray Size: " << param->numRowSubArray << "x" << param->numColSubArray << endl;
+				cout << endl;
+				cout << "----------------- # of memory array used for each layer -----------------" <<  endl;
+				
+				for (int i=0; i<netStructure.size(); i++) {
+					cout << "layer" << i+1 << ": " << numArrayEachLayer[i] << endl;
+				}
+				cout << endl;
+				cout << "----------------- Tier # of each layer in the memory cube, larger value means in higher tier -----------------" <<  endl;
+				
+				for (int i=0; i<netStructure.size(); i++) {
+					cout << "layer" << i+1 << ": " << tierLocationEachLayer[i] << endl;
+				}
+				cout << endl;
+				cout << "----------------- Speed-up of each layer ------------------" <<  endl;
+				for (int i=0; i<netStructure.size(); i++) {
+					cout << "layer" << i+1 << ": " << speedUpEachLayer[0][i] * speedUpEachLayer[1][i] << endl;
+				}
+				cout << endl;
+				
+				cout << "---------------------------- Heterogeneous 3D FloorPlan Done ------------------------------" <<  endl;
+				cout << endl;
+				cout << endl;
+				cout << endl;
 			}
-			int desiredBottomSize;
-			if (markNM[maxLayer] ==0) {
-				desiredBottomSize = numTileEachLayer[0][maxLayer] * numTileEachLayer[1][maxLayer] * desiredTileSizeCM;
-			} else {
-				desiredBottomSize = numTileEachLayer[0][maxLayer] * numTileEachLayer[1][maxLayer] * desiredPESizeNM * numPENM;
+			else{ //TODO digital的场景下，直接设定tsv的数量，理论上不需要所有subarray都有tsv，但是PE内部的accumulation依然需要，因此暂时设定tsv数量与PE保持一致
+				int maxLayer = 0;
+				int maxLayerSize = 0;
+				int numArrayLayer = 0;
+				int totalNumArray = 0;
+
+				int numberOftsv = desiredNumTileNM*numPENM;
+
+				double chipGlobalLogic = chipAreaResults[6];
+				double chip2DArea = chipArea;
+				// define number of TSV according to number of array and array size at each tier
+				tsvArea = numberOftsv*chipAreaResults[7];
+				
+				chipArea = tsvArea+ MAX(chipAreaArray, chipArea-chipAreaArray);
+				chipAreaIC *= chipArea/chip2DArea;
+				cout<<"-----------------Whole area composition------------"<<endl;
+				cout << "tsv area is: "<<tsvArea*1e6<<"mm^2"<<endl;
+				cout << "ChipArea array is: "<<chipAreaArray*1e6<<"mm^2"<<endl;
+				cout << "Chip 2D area is: "<<chip2DArea*1e6<<"mm^2"<<endl;
+				cout << "Chip 3D area is: "<<chipArea*1e6<<"mm^2"<<endl;
+				
+				cout << "------------------------------ Heterogeneous 3D FloorPlan --------------------------------" <<  endl;
+				cout << endl;
+				cout << "For layer-by-layer scheme, we assumed multiple memory tiers (like memory cube) on top of a logic tier (at bottom)" << endl;
+				cout << endl;
+				cout << "User-defined SubArray Size: " << param->numRowSubArray << "x" << param->numColSubArray << endl;
+				cout << endl;
+				cout << "Number of Memory tier is: "<<param->numMemTier<<endl;
+				cout << "Tile for each Memory tier: "<<desiredNumTileNM<<endl;
+				cout << "PE for each Tile: "<<numPENM<<endl;
+				cout << "Subarrays for each PE: "<<pow(desiredPESizeNM/(double)param->numColSubArray,2)<<endl;
+
+				
+				cout << "---------------------------- Heterogeneous 3D FloorPlan Done ------------------------------" <<  endl;
+				cout << endl;
+				cout << endl;
+				cout << endl;
 			}
-			int numArrayEachTier = ceil(totalNumArray/param->numMemTier);
-			chipAreaArray *= (double) numArrayEachTier/totalNumArray;
-			double chipGlobalLogic = chipAreaResults[6];
-			double chip2DArea = chipArea;
-			// define number of TSV according to number of array and array size at each tier
-			tsvArea = numArrayEachTier*chipAreaResults[7];
-			chipArea = tsvArea+ MAX(chipAreaArray, ((chipArea-chipAreaArray-chipGlobalLogic)*(desiredBottomSize/(desiredNumTileNM*numPENM*desiredPESizeNM+desiredNumTileCM*desiredTileSizeCM))+chipGlobalLogic));
-			chipAreaIC *= chipArea/chip2DArea;
-			
-			
-			// find each layer at which tier
-			int thisNumArray = 0;
-			for (int i=0; i<netStructure.size(); i++) {
-				thisNumArray += numArrayEachLayer[i];
-				tierLocationEachLayer.push_back(MIN(ceil(thisNumArray/numArrayEachTier)+1, param->numMemTier)); 
-			}
-			
-			cout << "------------------------------ Heterogeneous 3D FloorPlan --------------------------------" <<  endl;
-			cout << endl;
-			cout << "For layer-by-layer scheme, we assumed multiple memory tiers (like memory cube) on top of a logic tier (at bottom)" << endl;
-			cout << endl;
-			cout << "User-defined SubArray Size: " << param->numRowSubArray << "x" << param->numColSubArray << endl;
-			cout << endl;
-			cout << "----------------- # of memory array used for each layer -----------------" <<  endl;
-			
-			for (int i=0; i<netStructure.size(); i++) {
-				cout << "layer" << i+1 << ": " << numArrayEachLayer[i] << endl;
-			}
-			cout << endl;
-			cout << "----------------- Tier # of each layer in the memory cube, larger value means in higher tier -----------------" <<  endl;
-			
-			for (int i=0; i<netStructure.size(); i++) {
-				cout << "layer" << i+1 << ": " << tierLocationEachLayer[i] << endl;
-			}
-			cout << endl;
-			cout << "----------------- Speed-up of each layer ------------------" <<  endl;
-			for (int i=0; i<netStructure.size(); i++) {
-				cout << "layer" << i+1 << ": " << speedUpEachLayer[0][i] * speedUpEachLayer[1][i] << endl;
-			}
-			cout << endl;
-			
-			cout << "---------------------------- Heterogeneous 3D FloorPlan Done ------------------------------" <<  endl;
-			cout << endl;
-			cout << endl;
-			cout << endl;
+				
 			
 		} else {
 			cout << "------------------------------ 2D FloorPlan --------------------------------" <<  endl;
@@ -278,6 +363,7 @@ int main(int argc, char * argv[]) {
 		}
 		
 
+		return 0;
 	 
 		double clkPeriod = 0;
 		double layerclkPeriod = 0;

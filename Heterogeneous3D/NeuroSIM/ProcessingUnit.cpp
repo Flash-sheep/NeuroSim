@@ -253,10 +253,24 @@ vector<double> ProcessingUnitCalculateArea(SubArray *subArray, int numSubArrayRo
 		
 		busInputNM->CalculateArea(1, true); 
 		busOutputNM->CalculateArea(1, true);	
+
+		if(param->debug){
+			cout<<"-----------------PE area composition------------"<<endl;
+			cout<<"Single subArray: "<<subArray->usedArea*1e6<<"mm^2"<<endl;
+			cout<<"Total subArray: "<<subArray->usedArea*(numSubArrayRow*numSubArrayCol)*1e6<<"mm^2"<<endl;
+			cout<<"adderTreeNM: "<<adderTreeNM->area*1e6<<"mm^2"<<endl;
+			cout<<"bufferInputNM: "<<bufferInputNM->area*1e6<<"mm^2"<<endl;
+			cout<<"bufferOutputNM: "<<bufferOutputNM->area*1e6<<"mm^2"<<endl;
+			cout<<"busInputNM: "<<busInputNM->area*1e6<<"mm^2"<<endl;
+			cout<<"busOutputNM: "<<busOutputNM->area*1e6<<"mm^2"<<endl;
+		}
+		
+
 		area += subArray->usedArea * (numSubArrayRow*numSubArrayCol) + adderTreeNM->area + bufferInputNM->area + bufferOutputNM->area;
 
 		*height = sqrt(area);
 		*width = area/(*height);
+
 		
 		areaResults.push_back(area);
 		areaResults.push_back(subArray->areaADC*(numSubArrayRow*numSubArrayCol));
@@ -311,6 +325,7 @@ double ProcessingUnitCalculatePerformance(SubArray *subArray, const vector<vecto
 	
 	double subArrayReadLatency, subArrayReadDynamicEnergy, subArrayLeakage, subArrayLatencyADC, subArrayLatencyAccum, subArrayLatencyOther;
 
+	
 	if (arrayDupRow*arrayDupCol > 1) {
 		// weight matrix is duplicated among subArray
 		if (arrayDupRow < numSubArrayRow || arrayDupCol < numSubArrayCol) {
