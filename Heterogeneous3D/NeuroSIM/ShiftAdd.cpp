@@ -40,12 +40,9 @@
 #include <iostream>
 #include "constant.h"
 #include "formula.h"
-#include "Param.h"
 #include "ShiftAdd.h"
 
 using namespace std;
-
-extern Param *param;
 
 ShiftAdd::ShiftAdd(const InputParameter& _inputParameter, const Technology& _tech, const MemCell& _cell): inputParameter(_inputParameter), tech(_tech), cell(_cell), adder(_inputParameter, _tech, _cell), dff(_inputParameter, _tech, _cell), FunctionUnit() {
 	initialized = false;
@@ -65,7 +62,7 @@ void ShiftAdd::Initialize(int _numUnit, int _numAdderBit, double _clkFreq, Spiki
 	if (spikingMode == NONSPIKING) {	// NONSPIKING: binary format
 		numDff = (numAdderBit+1 + numReadPulse-1) * numUnit;	// numAdderBit+1 because the adder output is 1 bit more than the input, and numReadPulse-1 is for shift-and-add extension (shift register)
 		dff.Initialize(numDff, clkFreq);
-		adder.Initialize(numAdderBit, numAdder, clkFreq);
+		adder.Initialize(numAdderBit, numAdder);
 	} else {	// SPIKING: count spikes
 		numBitPerDff = pow(2, numAdderBit);
 		numDff = numBitPerDff * numUnit;	// numUnit shift registers in total
@@ -132,7 +129,7 @@ void ShiftAdd::CalculateArea(double _newHeight, double _newWidth, AreaModify _op
 			}
 			area = height * width;
 		}
-
+		
 		// Modify layout
 		newHeight = _newHeight;
 		newWidth = _newWidth;
@@ -161,29 +158,21 @@ void ShiftAdd::CalculateLatency(double numRead) {
 			// We can shift and add the weighted sum data in the next vector pulse integration cycle
 			// Thus the shift-and-add time can be partially hidden by the vector pulse integration time at the next cycle
 			// But there is at least one time of shift-and-add, which is at the last vector pulse cycle
-			if (param->synchronous) {
-				readLatency = numRead; 	// #cycles
-			} else {
-				adder.CalculateLatency(1e20, dff.capTgDrain, 1);
-				dff.CalculateLatency(1e20, 1);
-				double shiftAddLatency = adder.readLatency + dff.readLatency;
-				if (shiftAddLatency > cell.readPulseWidth)    // Completely hidden in the vector pulse cycle if smaller
-					readLatency += (shiftAddLatency - cell.readPulseWidth) * (numRead - 1);
-				readLatency += shiftAddLatency;    // At least need one time of shift-and-add
-			}
+			adder.CalculateLatency(1e20, dff.capTgDrain, 1);
+			dff.CalculateLatency(1e20, 1);
+			double shiftAddLatency = adder.readLatency + dff.readLatency;
+			if (shiftAddLatency > cell.readPulseWidth)    // Completely hidden in the vector pulse cycle if smaller
+				readLatency += (shiftAddLatency - cell.readPulseWidth) * (numRead - 1);
+			readLatency += shiftAddLatency;    // At least need one time of shift-and-add
 		} else {	// SPIKING: count spikes
 			// We can shift out the weighted sum data in the next vector pulse integration cycle
 			// Thus the shiftout time can be partially hidden by the vector pulse integration time at the next cycle
 			// But there is at least one time of shiftout, which is at the last vector pulse cycle
-			if (param->synchronous) {
-				readLatency = numBitPerDff * numRead;	// #cycles
-			} else {
-				dff.CalculateLatency(1e20, numBitPerDff);	// Need numBitPerDff cycles to shift out the weighted sum data
-				double shiftLatency = dff.readLatency;
-				if (shiftLatency > cell.readPulseWidth)	// Completely hidden in the vector pulse cycle if smaller
-					readLatency += (shiftLatency - cell.readPulseWidth) * (numRead - 1);
-				readLatency += shiftLatency;	// At least need one time of shiftout
-			}
+			dff.CalculateLatency(1e20, numBitPerDff);	// Need numBitPerDff cycles to shift out the weighted sum data
+			double shiftLatency = dff.readLatency;
+			if (shiftLatency > cell.readPulseWidth)	// Completely hidden in the vector pulse cycle if smaller
+				readLatency += (shiftLatency - cell.readPulseWidth) * (numRead - 1);
+			readLatency += shiftLatency;	// At least need one time of shiftout
 		}
 	}
 }
@@ -196,15 +185,13 @@ void ShiftAdd::CalculatePower(double numRead) {
 		readDynamicEnergy = 0;
 		if (spikingMode == NONSPIKING) {	// NONSPIKING: binary format
 			adder.CalculatePower(numRead, numAdder);
-			dff.CalculatePower(numRead, numDff, param->validated);
-			
+			dff.CalculatePower(numRead, numDff);
 			readDynamicEnergy += adder.readDynamicEnergy;
 			readDynamicEnergy += dff.readDynamicEnergy;
-
 			leakage += adder.leakage;
 			leakage += dff.leakage;
 		} else {	// SPIKING: count spikes
-			dff.CalculatePower(numRead, numDff, param->validated);
+			dff.CalculatePower(numRead, numDff);
 			readDynamicEnergy += dff.readDynamicEnergy;
 			leakage += dff.leakage;
 		}

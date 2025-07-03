@@ -56,7 +56,7 @@ public:
 
 	/* Functions */
 	void PrintProperty(const char* str);
-	void Initialize(int _numSubcoreRow, int _numAdderBit, int _numAdderTree, double _clkFreq);
+	void Initialize(int _numSubcoreRow, int _numAdderBit, int _numAdderTree);
 	void CalculateArea(double _newHeight, double _newWidth, AreaModify _option);
 	void CalculateLatency(double numRead, int numUnitAdd, double _capLoad);
 	void CalculatePower(double numRead, int numUnitAdd);
@@ -69,8 +69,7 @@ public:
 	int numAdderBit;                      // # of input bits of the Adder
 	int numAdderTree;                     // # of Adder Tree
 	int numReadPulse;
-	double clkFreq;
-	
+
 	Adder adder;
 };
 

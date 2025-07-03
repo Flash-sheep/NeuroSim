@@ -62,7 +62,7 @@ void Technology::Initialize(int _featureSizeInNano, DeviceRoadmap _deviceRoadmap
 				/* PTM model: 130nm_HP.pm, from http://ptm.asu.edu/ */
 				vdd = 1.3;
 				vth = 128.4855e-3;
-				phyGateLength = 7.5e-8;
+				phyGateLength = 1.3e-7;
 				capIdealGate = 6.058401e-10;
 				capFringe = 6.119807e-10;
 				effectiveResistanceMultiplier = 1.54;	/* from CACTI */
@@ -117,7 +117,7 @@ void Technology::Initialize(int _featureSizeInNano, DeviceRoadmap _deviceRoadmap
 				/* PTM model: 130nm_LP.pm, from http://ptm.asu.edu/ */
 				vdd = 1.3;
 				vth = 466.0949e-3;
-				phyGateLength = 7.5e-8;
+				phyGateLength = 1.3e-7;
 				capIdealGate = 1.8574e-9;
 				capFringe = 9.530642e-10;
 				effectiveResistanceMultiplier = 1.54;	/* from CACTI */
@@ -174,7 +174,7 @@ void Technology::Initialize(int _featureSizeInNano, DeviceRoadmap _deviceRoadmap
 				/* PTM model: 90nm_HP.pm, from http://ptm.asu.edu/ */
 				vdd = 1.2;
 				vth = 146.0217e-3;
-				phyGateLength = 5.5e-8;
+				phyGateLength = 9.0e-8;
 				capIdealGate = 5.694423e-10;
 				capFringe = 5.652302e-10;
 				effectiveResistanceMultiplier = 1.54;	/* from CACTI */
@@ -229,7 +229,7 @@ void Technology::Initialize(int _featureSizeInNano, DeviceRoadmap _deviceRoadmap
 				/* PTM model: 90nm_LP.pm, from http://ptm.asu.edu/ */
 				vdd = 1.2;
 				vth = 501.3229e-3;
-				phyGateLength = 5.5e-8;
+				phyGateLength = 9.0e-8;
 				capIdealGate = 1.5413e-10;
 				capFringe = 9.601334e-10;
 				effectiveResistanceMultiplier = 1.77;	/* from CACTI */
@@ -286,7 +286,7 @@ void Technology::Initialize(int _featureSizeInNano, DeviceRoadmap _deviceRoadmap
 				/* PTM model: 65nm_HP.pm, from http://ptm.asu.edu/ */
 				vdd = 1.1;
 				vth = 166.3941e-3;
-				phyGateLength = 3.5e-8;
+				phyGateLength = 6.5e-8;
 				capIdealGate = 4.868295e-10;
 				capFringe = 5.270361e-10;
 				effectiveResistanceMultiplier = 1.54;	/* from CACTI */
@@ -341,7 +341,7 @@ void Technology::Initialize(int _featureSizeInNano, DeviceRoadmap _deviceRoadmap
 				/* PTM model: 65nm_LP.pm, from http://ptm.asu.edu/ */
 				vdd = 1.1;
 				vth = 501.6636e-3;
-				phyGateLength = 3.5e-8;
+				phyGateLength = 6.5e-8;
 				capIdealGate = 1.1926e-9;
 				capFringe = 9.62148e-10;
 				effectiveResistanceMultiplier = 1.77;	/* from CACTI */
@@ -398,7 +398,7 @@ void Technology::Initialize(int _featureSizeInNano, DeviceRoadmap _deviceRoadmap
 				/* PTM model: 45nm_HP.pm, from http://ptm.asu.edu/ */
 				vdd = 1.0;
 				vth = 171.0969e-3;
-				phyGateLength = 3.0e-8;
+				phyGateLength = 4.5e-8;
 				capIdealGate = 4.091305e-10;
 				capFringe = 4.957928e-10;
 				effectiveResistanceMultiplier = 1.54;	/* from CACTI */
@@ -453,7 +453,7 @@ void Technology::Initialize(int _featureSizeInNano, DeviceRoadmap _deviceRoadmap
 				/* PTM model: 45nm_LP.pm, from http://ptm.asu.edu/ */
 				vdd = 1;
 				vth = 464.3718e-3;
-				phyGateLength = 3.0e-8;
+				phyGateLength = 4.5e-8;
 				capIdealGate = 8.930709e-10;
 				capFringe = 8.849901e-10;
 				effectiveResistanceMultiplier = 1.77;	/* from CACTI */
@@ -510,7 +510,7 @@ void Technology::Initialize(int _featureSizeInNano, DeviceRoadmap _deviceRoadmap
 				/* PTM model: 32nm_HP.pm, from http://ptm.asu.edu/ */
 				vdd = 0.9;
 				vth = 194.4951e-3;
-				phyGateLength = 2.8e-8;
+				phyGateLength = 3.4e-8;
 				capIdealGate = 3.767721e-10;
 				capFringe = 4.713762e-10;
 				effectiveResistanceMultiplier = 1.54;	/* from CACTI */
@@ -565,7 +565,7 @@ void Technology::Initialize(int _featureSizeInNano, DeviceRoadmap _deviceRoadmap
 				/* PTM model: 32nm_LP.pm, from http://ptm.asu.edu/ */
 				vdd = 0.9;
 				vth = 442.034e-3;
-				phyGateLength = 2.8e-8;
+				phyGateLength = 3.4e-8;
 				capIdealGate = 8.375279e-10;
 				capFringe = 6.856677e-10;
 				effectiveResistanceMultiplier = 1.77;	/* from CACTI */
@@ -622,7 +622,7 @@ void Technology::Initialize(int _featureSizeInNano, DeviceRoadmap _deviceRoadmap
 				/* PTM model: 22nm.pm, from http://ptm.asu.edu/ */
 				vdd = 0.85;
 				vth = 208.9006e-3;
-				phyGateLength = 2.6e-8;
+				phyGateLength = 2.0e-8;
 				capIdealGate = 3.287e-10;
 				capFringe = 4.532e-10;
 				effectiveResistanceMultiplier = 1.54;	/* from CACTI */
@@ -677,7 +677,7 @@ void Technology::Initialize(int _featureSizeInNano, DeviceRoadmap _deviceRoadmap
 				/* PTM model: 22nm_LP.pm, from http://ptm.asu.edu/ */
 				vdd = 0.85;
 				vth = 419.915e-3;
-				phyGateLength = 2.6e-8; 	
+				phyGateLength = 2.0e-8;
 				capIdealGate = 5.245e-10;
 				capFringe = 8.004e-10;
 				effectiveResistanceMultiplier = 1.77;	/* from CACTI */
@@ -734,10 +734,11 @@ void Technology::Initialize(int _featureSizeInNano, DeviceRoadmap _deviceRoadmap
 				/* PTM model: 14nfet_HP.pm,14pfet_HP.pm, from http://ptm.asu.edu/ */
 				vdd = 0.8;
 				vth = 172.9868e-3;
-				heightFin = 3.7e-8;				
-				widthFin = 8e-9;
-				PitchFin = 4.8e-8;			
-				phyGateLength = 2.2e-8;
+				heightFin = 2.3e-8;
+				
+				widthFin = 1.0e-8;
+				PitchFin = 3.2e-8;			
+				phyGateLength = 1.8e-8;
 				capIdealGate = 1.2573e-9;
 				capFringe = 0;
 				effectiveResistanceMultiplier = 1.51;	/* from CACTI */
@@ -792,10 +793,10 @@ void Technology::Initialize(int _featureSizeInNano, DeviceRoadmap _deviceRoadmap
 				/* PTM model: 14nfet_LP.pm,14pfet_LP.pm, from http://ptm.asu.edu/ */
 				vdd = 0.8;
 				vth = 382.1222e-3;
-				heightFin = 3.7e-8;
-				widthFin = 8e-9;
-				PitchFin = 4.8e-8;
-				phyGateLength = 2.2e-8;
+				heightFin = 2.3e-8;
+				widthFin = 1.0e-8;
+				PitchFin = 3.2e-8;
+				phyGateLength = 1.8e-8;
 				capIdealGate = 1.0572e-9;
 				capFringe = 0;
 				effectiveResistanceMultiplier = 1.76;	/* from CACTI */
@@ -852,10 +853,10 @@ void Technology::Initialize(int _featureSizeInNano, DeviceRoadmap _deviceRoadmap
 				/* PTM model: 10nfet_HP.pm,10pfet_HP.pm, from http://ptm.asu.edu/ */
 				vdd = 0.75;
 				vth = 182.8605e-3;
-				heightFin = 4.2e-8;
-				widthFin = 6e-9;
-				PitchFin = 3.6e-8;			
-				phyGateLength = 2.0e-8;
+				heightFin = 2.1e-8;
+				widthFin = 9e-9;
+				PitchFin = 2.8e-8;			
+				phyGateLength = 1.4e-8;
 				capIdealGate = 1.1418e-9;
 				capFringe = 0;
 				effectiveResistanceMultiplier = 1.49;	/* from CACTI */
@@ -910,10 +911,10 @@ void Technology::Initialize(int _featureSizeInNano, DeviceRoadmap _deviceRoadmap
 				/* PTM model: 10nfet_LP.pm,10pfet_LP.pm, from http://ptm.asu.edu/ */
 				vdd = 0.75;
 				vth = 390.5541e-3;
-				heightFin = 4.2e-8;		
-				widthFin = 6e-9;		
-				PitchFin = 3.6e-8;				
-				phyGateLength = 2e-8;	
+				heightFin = 2.1e-8;
+				widthFin = 9e-9;
+				PitchFin = 2.8e-8;			
+				phyGateLength = 1.4e-8;
 				capIdealGate = 9.418984e-10;
 				capFringe = 0;
 				effectiveResistanceMultiplier = 1.73;	/* from CACTI */
@@ -970,10 +971,10 @@ void Technology::Initialize(int _featureSizeInNano, DeviceRoadmap _deviceRoadmap
 				/* PTM model: 7nfet_HP.pm,7pfet_HP.pm, from http://ptm.asu.edu/ */
 				vdd = 0.7;
 				vth = 192.2339e-3;
-				heightFin = 5.2e-8;
-				widthFin = 6e-9;
-				PitchFin = 3.0e-8;			
-				phyGateLength = 1.8e-8;
+				heightFin = 1.8e-8;
+				widthFin = 7e-9;
+				PitchFin = 2.2e-8;			
+				phyGateLength = 1.1e-8;
 				capIdealGate = 1.0487e-9;
 				capFringe = 0;
 				effectiveResistanceMultiplier = 1.45;	/* from CACTI */
@@ -1028,16 +1029,16 @@ void Technology::Initialize(int _featureSizeInNano, DeviceRoadmap _deviceRoadmap
 				/* PTM model: 7nfet_LP.pm,7pfet_LP.pm, from http://ptm.asu.edu/ */
 				vdd = 0.7;
 				vth = 402.5252e-3;
-				heightFin = 5.2e-8;
-				widthFin = 6e-9;
-				PitchFin = 3.0e-8;			
-				phyGateLength = 1.8e-8;
+				heightFin = 1.8e-8;
+				widthFin = 7e-9;
+				PitchFin = 2.2e-8;			
+				phyGateLength = 1.1e-8;
 				capIdealGate = 8.49489e-10;
 				capFringe = 0;
 				effectiveResistanceMultiplier = 1.73;	/* from CACTI */
 				current_gmNmos=8.22E+02;
 				current_gmPmos=1.45E+02;			
-				currentOnNmos[0]  = 822;
+				currentOnNmos[0]  = 822; 
 				currentOnNmos[10] = 786; 
 				currentOnNmos[20] = 750; 
 				currentOnNmos[30] = 716; 
@@ -1447,9 +1448,6 @@ void Technology::Initialize(int _featureSizeInNano, DeviceRoadmap _deviceRoadmap
 	} else {
 		capOverlap = 0;	// capOverlap and capFringe are included in capIdealGate in FinFET technology, so we let these two parameters 0
 	}
-	// double cjd = 1e-2;			/* Bottom junction capacitance, Unit: F/m^2*/
-	// double cjswd = 8.03e-10;		/* Isolation-edge sidewall junction capacitance, Unit: F/m */
-	// double cjswgd = 8.03e-10;	/* Gate-edge sidewall junction capacitance, Unit: F/m */
 	double cjd = 1e-3;			/* Bottom junction capacitance, Unit: F/m^2*/
 	double cjswd = 2.5e-10;		/* Isolation-edge sidewall junction capacitance, Unit: F/m */
 	double cjswgd = 0.5e-10;	/* Gate-edge sidewall junction capacitance, Unit: F/m */

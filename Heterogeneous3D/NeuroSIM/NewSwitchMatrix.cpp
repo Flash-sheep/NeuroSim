@@ -70,7 +70,6 @@ void NewSwitchMatrix::Initialize(int _numOutput, double _activityRowRead, double
 	dff.Initialize(numOutput, clkFreq); 
 	widthTgN = MIN_NMOS_SIZE * tech.featureSize;
 	widthTgP = tech.pnSizeRatio * MIN_NMOS_SIZE * tech.featureSize;
-	EnlargeSize(&widthTgN, &widthTgP, tech.featureSize*MAX_TRANSISTOR_HEIGHT, tech);
 	resTg = CalculateOnResistance(widthTgN, NMOS, inputParameter.temperature, tech) * LINEAR_REGION_RATIO;
 	
 	initialized = true;
@@ -149,7 +148,7 @@ void NewSwitchMatrix::CalculateLatency(double _rampInput, double _capLoad, doubl
 		readLatency += horowitz(tr, 0, rampInput, &rampOutput);	// get from chargeLatency in the original SubArray.cpp
 		
 		readLatency *= numRead;
-		// readLatency += dff.readLatency;
+		readLatency += dff.readLatency;
 
 		writeLatency = horowitz(tr, 0, rampInput, &rampOutput);     // write latency determined by write pulse width
 		writeLatency *= numWrite;
@@ -167,7 +166,7 @@ void NewSwitchMatrix::CalculatePower(double numRead, double numWrite, double act
 		writeDynamicEnergy = 0;
 		
 		// DFF
-		dff.CalculatePower(numRead, numOutput, false);	// Use numOutput since every DFF will pass signal (either 0 or 1)
+		dff.CalculatePower(numRead, numOutput);	// Use numOutput since every DFF will pass signal (either 0 or 1)
 
 		// Leakage power
 		leakage += dff.leakage;	// Only DFF has leakage, assuming TG do not have leakage

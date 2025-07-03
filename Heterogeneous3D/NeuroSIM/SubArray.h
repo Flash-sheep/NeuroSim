@@ -65,7 +65,6 @@
 #include "MultilevelSenseAmp.h"
 #include "MultilevelSAEncoder.h"
 #include "SarADC.h"
-#include "LevelShifter.h"
 
 using namespace std;
 
@@ -81,13 +80,16 @@ public:
 	void PrintProperty();
 	void Initialize(int _numRow, int _numCol, double _unitWireRes);
 	void CalculateArea();
-	void CalculateLatency(double _rampInput, const vector<double> &columnResistance, bool CalculateclkFreq);
-	void CalculatePower(const vector<double> &columnResistance);
+	void CalculateLatency(double _rampInput, const vector<double> &columnResistance, const vector<double> &rowResistance);
+	void CalculatePower(const vector<double> &columnResistance, const vector<double> &rowResistance);
 
 	/* Properties */	
 	bool initialized;	   // Initialization flag
 	int numRow;			   // Number of rows
 	int numCol;			   // Number of columns
+
+	int mulNor; 			// Number of Nor times for Mul op
+	int addNor;			// Number of Nor times for Add op
 	
 	int numColMuxed;	   // How many columns share 1 read circuit (for neuro mode with analog RRAM) or 1 S/A (for memory mode or neuro mode with digital RRAM)
 	int numWriteColMuxed;	// // How many columns share 1 write column decoder driver (for memory or neuro mode with digital RRAM)
@@ -113,7 +115,8 @@ public:
 
 	double activityRowWrite;	// Activity for # of rows in the write
 	double activityColWrite;	// Activity for # of columns in the write
-	double activityRowRead, activityColRead;		// Activity for # of rows in the read
+	double activityRowRead;		// Activity for # of rows in the read
+	double activityBPColRead;
 	int numReadPulse;		// # of read pulses for the input vector
 	double numWritePulse;	// Average number of write pulse
 	int maxNumWritePulse;	// Max # of write pulses for the device
@@ -127,12 +130,11 @@ public:
 	bool BNNsequentialMode;     
 	bool BNNparallelMode;      
 	bool XNORsequentialMode;      
-	bool XNORparallelMode;    
-	bool SARADC;                // true: use sar adc; false: use MLSA	
+	bool XNORparallelMode;   
+	bool parallelBP, trainingEstimation;	
 	bool currentMode;
-	bool validated;
 
-	int levelOutput;
+	int levelOutput, numReadPulseBP, levelOutputBP, numRowMuxedBP, layerNumber;
 	
 	ReadCircuitMode readCircuitMode;
 	int numWriteCellPerOperationFPGA;   // Parameter for SRAM
@@ -144,7 +146,7 @@ public:
 	int numReadCellPerOperationFPGA;    // Parameter for SRAM
 	int numReadCellPerOperationMemory;  // Parameter for SRAM
 	int numReadCellPerOperationNeuro;   // Parameter for SRAM (use numBitPerCell cells to represent one D)
-	bool parallelWrite; // Parameter for crossbar RRAM in neuro mode
+	bool parallelWrite; // Parameter for crossbar RRAM in neuro mode //在这里用于标记是否使用数字计算
 	bool FPGA;
 	bool LUT_dynamic;   // Parameter for FPGA
 	bool backToBack;    // Parameter for FPGA Mux (2 Mux triangles can combine into a Mux rectangle)
@@ -154,42 +156,49 @@ public:
 	SpikingMode spikingMode;	// NONSPIKING: input data using pulses in binary representation
 								// SPIKING: input data using # of pulses
 	bool shiftAddEnable;    // 0 for partition because the shift-and-add circuit will be after the last A&R stage
-
+	bool SARADC;                // true: use sar adc; false: use MLSA
 	bool relaxArrayCellHeight;	// true: relax the memory cell height to match the height of periperal circuit unit that connects to the row (ex: standard cell height in the last stage of row decoder) if the latter is larger
 	bool relaxArrayCellWidth;	// true: relax the memory cell width to match the width of periperal circuit unit that connects to the column (ex: pass gate width in the column mux) if the latter is larger
 
 	double areaADC, areaAccum, areaOther, readLatencyADC, readLatencyAccum, readLatencyOther, readDynamicEnergyADC, readDynamicEnergyAccum, readDynamicEnergyOther;
-	
-	bool trainingEstimation, parallelTrans;
-	int levelOutputTrans, numRowMuxedTrans, numReadPulseTrans;
+	double areaAG, readLatencyAG, readDynamicEnergyAG;
 
-	/* Circuit Modules */
-	LevelShifter			 wllevelshifter;
-	LevelShifter			 sllevelshifter;
-	LevelShifter			 bllevelshifter;
-	RowDecoder               wlDecoder;
-	WLDecoderOutput          wlDecoderOutput;
-	WLNewDecoderDriver       wlNewDecoderDriver;
-	NewSwitchMatrix          wlNewSwitchMatrix;
-	CurrentSenseAmp          rowCurrentSenseAmp;
-	Mux                      mux;
-	RowDecoder               muxDecoder;
-	SwitchMatrix             slSwitchMatrix;
-	SwitchMatrix             blSwitchMatrix;
-	SwitchMatrix             wlSwitchMatrix;
-	DeMux                    deMux;
-	ReadCircuit              readCircuit;
-	Precharger               precharger;
-	SenseAmp                 senseAmp;
-	DecoderDriver            wlDecoderDriver;
-	SRAMWriteDriver          sramWriteDriver;
-	DFF                      dff;
-	Adder                    adder;
-	ShiftAdd                 shiftAddInput;
-	ShiftAdd                 shiftAddWeight;
-	MultilevelSenseAmp       multilevelSenseAmp;
-	MultilevelSAEncoder      multilevelSAEncoder;
-	SarADC                   sarADC;
+	/* Circuit modules */
+	RowDecoder                   wlDecoder;
+	DecoderDriver                wlDecoderDriver;
+	WLNewDecoderDriver           wlNewDecoderDriver;
+	SwitchMatrix                 wlSwitchMatrix;
+	NewSwitchMatrix              wlNewSwitchMatrix;
+	SwitchMatrix                 slSwitchMatrix;
+	Mux                          mux;
+	RowDecoder                   muxDecoder;
+	Precharger                   precharger;
+	SenseAmp                     senseAmp;
+	SRAMWriteDriver              sramWriteDriver;
+	CurrentSenseAmp              rowCurrentSenseAmp;
+	DFF                          dff;
+	Adder                        adder;
+	MultilevelSenseAmp           multilevelSenseAmp;
+	MultilevelSAEncoder          multilevelSAEncoder;
+	SarADC                       sarADC;
+	ShiftAdd                     shiftAddInput;
+	ShiftAdd                     shiftAddWeight;
+	/* Circuit modules for Transpose (BP) */
+	RowDecoder                   wlDecoderBP;
+	SwitchMatrix                 wlSwitchMatrixBP;
+	Precharger                   prechargerBP;
+	SenseAmp                     senseAmpBP;
+	SRAMWriteDriver              sramWriteDriverBP;
+	Mux                          muxBP;
+	RowDecoder                   muxDecoderBP;
+	CurrentSenseAmp              rowCurrentSenseAmpBP;
+	DFF                          dffBP;
+	Adder                        adderBP;
+	MultilevelSenseAmp           multilevelSenseAmpBP;
+	MultilevelSAEncoder          multilevelSAEncoderBP;
+	SarADC                       sarADCBP;
+	ShiftAdd               	     shiftAddBPInput;
+	ShiftAdd                     shiftAddBPWeight;
 };
 
 #endif /* SUBARRAY_H_ */

@@ -56,7 +56,7 @@ public:
 	/* Functions */
 	void PrintProperty(const char* str);
 	void SaveOutput(const char* str);
-	void Initialize(int _numBit, int _numAdder, double _clkFreq);
+	void Initialize(int _numBit, int _numAdder);
 	void CalculateArea(double _newHeight, double _newWidth, AreaModify _option);
 	void CalculateLatency(double _rampInput, double _capLoad, double numRead);
 	void CalculatePower(double numRead, int numAdderPerOperation);
@@ -70,7 +70,7 @@ public:
 	double widthNandN, widthNandP;
 	double hAdder, wAdder;
 	double rampInput, rampOutput;
-	double clkFreq;
+
 };
 
 #endif /* ADDER_H_ */

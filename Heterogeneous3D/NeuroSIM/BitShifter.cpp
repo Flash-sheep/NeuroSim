@@ -116,7 +116,7 @@ void BitShifter::CalculatePower(double numRead) {
 		leakage = 0;
 		readDynamicEnergy = 0;
 		
-		dff.CalculatePower(numRead, numDff, false);	
+		dff.CalculatePower(numRead, numDff);	
 		readDynamicEnergy += dff.readDynamicEnergy;
 		leakage += dff.leakage;
 	}

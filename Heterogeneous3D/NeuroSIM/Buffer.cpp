@@ -40,8 +40,8 @@
 #include <iostream>
 #include "constant.h"
 #include "formula.h"
-#include "Param.h"
 #include "Buffer.h"
+#include "Param.h"
 
 using namespace std;
 
@@ -52,8 +52,7 @@ Buffer::Buffer(const InputParameter& _inputParameter, const Technology& _tech, c
                       wlDecoder(_inputParameter, _tech, _cell), 
 					  precharger(_inputParameter, _tech, _cell), 
 					  sramWriteDriver(_inputParameter, _tech, _cell), 
-					  senseAmp(_inputParameter, _tech, _cell), 
-					  dff(_inputParameter, _tech, _cell), FunctionUnit() {
+					  senseAmp(_inputParameter, _tech, _cell), FunctionUnit() {
 	initialized = false;
 }
 
@@ -75,7 +74,8 @@ void Buffer::Initialize(int _numBit, int _interface_width, int _num_interface, d
 		precharger.Initialize(interface_width, lengthCol * unitWireRes, 1, interface_width, interface_width);
 		sramWriteDriver.Initialize(interface_width, 1, interface_width);
 	} else {
-		dff.Initialize(numBit, clkFreq);
+		widthInvN = MIN_NMOS_SIZE * tech.featureSize;
+		widthInvP = tech.pnSizeRatio * MIN_NMOS_SIZE * tech.featureSize;
 	}
 	
 	wlDecoder.Initialize(REGULAR_ROW, (int)ceil((double)log2((double)ceil((double)numBit/(double)interface_width))), false, false);
@@ -96,13 +96,22 @@ void Buffer::CalculateArea(double _newHeight, double _newWidth, AreaModify _opti
 			wlDecoder.CalculateArea(lengthCol, NULL, NONE);
 			precharger.CalculateArea(NULL, lengthRow, NONE);
 			sramWriteDriver.CalculateArea(NULL, lengthRow, NONE);
-			
 			area += memoryArea + wlDecoder.area + precharger.area + sramWriteDriver.area;
 		} else {
-			dff.CalculateArea(NULL, NULL, NONE);
-			wlDecoder.CalculateArea(dff.hDff*ceil((double)numBit/(double)interface_width), NULL, NONE);
-			area += dff.area + wlDecoder.area;
-			// cout<<dff.area<<" "<<wlDecoder.area<<endl;s
+			CalculateGateArea(INV, 1, widthInvN, widthInvP, tech.featureSize*MAX_TRANSISTOR_HEIGHT, tech, &hDffInv, &wDffInv);
+			hDff = hDffInv;
+			wDff = wDffInv * 12;
+			memoryArea = hDff * wDff * numBit;
+			wlDecoder.CalculateArea(hDff*ceil((double)numBit/(double)interface_width), NULL, NONE);
+			area += memoryArea + wlDecoder.area;
+			
+			// Capacitance
+			// INV
+			CalculateGateCapacitance(INV, 1, widthInvN, widthInvP, hDffInv, tech, &capInvInput, &capInvOutput);
+			// TG
+			capTgGateN = CalculateGateCap(widthInvN, tech);
+			capTgGateP = CalculateGateCap(widthInvP, tech);
+			CalculateGateCapacitance(INV, 1, widthInvN, widthInvP, hDffInv, tech, NULL, &capTgDrain);
 		}
 
 		if (_newWidth && _option==NONE) {
@@ -141,37 +150,32 @@ void Buffer::CalculateLatency(double numAccessBitRead, double numRead, double nu
 		readWholeLatency = 0;
 		writeWholeLatency = 0;
 		
-		if (param->synchronous) {
-			readLatency = numRead;		// read 1 line per cycle
-			writeLatency = numWrite;
+		if (SRAM) {
+			wlDecoder.CalculateLatency(1e20, lengthRow * 0.2e-15/1e-6, NULL, (double) numBit/interface_width, (double) numBit/interface_width);
+			precharger.CalculateLatency(1e20, lengthCol * 0.2e-15/1e-6, (double) numBit/interface_width, (double) numBit/interface_width);
+			sramWriteDriver.CalculateLatency(1e20, lengthCol * 0.2e-15/1e-6, lengthCol * unitWireRes, (double) numBit/interface_width);
+			
+			double resCellAccess = CalculateOnResistance(param->widthAccessCMOS * tech.featureSize, NMOS, inputParameter.temperature, tech);
+			double capCellAccess = CalculateDrainCap(param->widthAccessCMOS * tech.featureSize, NMOS, param->widthInFeatureSizeSRAM * tech.featureSize, tech);
+			double resPullDown = CalculateOnResistance(param->widthSRAMCellNMOS * tech.featureSize, NMOS, inputParameter.temperature, tech);
+			double tau = (resCellAccess + resPullDown) * (capCellAccess + lengthCol * 0.2e-15/1e-6) + lengthCol * unitWireRes * (lengthCol * 0.2e-15/1e-6) / 2;
+			tau *= log(tech.vdd / (tech.vdd - param->minSenseVoltage / 2));   
+			double gm = CalculateTransconductance(param->widthAccessCMOS * tech.featureSize, NMOS, tech);
+			double beta = 1 / (resPullDown * gm);
+			double colRamp = 0;
+			colDelay = horowitz(tau, beta, wlDecoder.rampOutput, &colRamp)*((double) numBit/interface_width);
+			readWholeLatency += wlDecoder.readLatency + precharger.readLatency + colDelay;
+			writeWholeLatency += wlDecoder.writeLatency + precharger.writeLatency + sramWriteDriver.writeLatency;
 		} else {
-			if (SRAM) {
-				wlDecoder.CalculateLatency(1e20, lengthRow * 0.2e-15/1e-6, NULL, (double) numBit/interface_width, (double) numBit/interface_width);
-				precharger.CalculateLatency(1e20, lengthCol * 0.2e-15/1e-6, (double) numBit/interface_width, (double) numBit/interface_width);
-				sramWriteDriver.CalculateLatency(1e20, lengthCol * 0.2e-15/1e-6, lengthCol * unitWireRes, (double) numBit/interface_width);
-				
-				double resCellAccess = CalculateOnResistance(param->widthAccessCMOS * tech.featureSize, NMOS, inputParameter.temperature, tech);
-				double capCellAccess = CalculateDrainCap(param->widthAccessCMOS * tech.featureSize, NMOS, param->widthInFeatureSizeSRAM * tech.featureSize, tech);
-				double resPullDown = CalculateOnResistance(param->widthSRAMCellNMOS * tech.featureSize, NMOS, inputParameter.temperature, tech);
-				double tau = (resCellAccess + resPullDown) * (capCellAccess + lengthCol * 0.2e-15/1e-6) + lengthCol * unitWireRes * (lengthCol * 0.2e-15/1e-6) / 2;
-				tau *= log(tech.vdd / (tech.vdd - param->minSenseVoltage / 2));   
-				double gm = CalculateTransconductance(param->widthAccessCMOS * tech.featureSize, NMOS, tech);
-				double beta = 1 / (resPullDown * gm);
-				double colRamp = 0;
-				colDelay = horowitz(tau, beta, wlDecoder.rampOutput, &colRamp)*((double) numBit/interface_width);
-				readWholeLatency += wlDecoder.readLatency + precharger.readLatency + colDelay;
-				writeWholeLatency += wlDecoder.writeLatency + precharger.writeLatency + sramWriteDriver.writeLatency;
-			} else {
-				wlDecoder.CalculateLatency(1e20, dff.hDff * interface_width * 0.2e-15/1e-6, NULL, (double) numBit/interface_width, (double) numBit/interface_width);
-				readWholeLatency += wlDecoder.readLatency;
-				readWholeLatency += ((double) 1/clkFreq/2)*((double) numBit/interface_width);  // assume dff need half clock cycle to access
-				writeWholeLatency += wlDecoder.writeLatency + ((double) 1/clkFreq/2)*((double) numBit/interface_width);
-			}			
-			avgBitReadLatency = (double) readWholeLatency/(numBit/interface_width);     // average latency per line(sec/line)
-			avgBitWriteLatency = (double) writeWholeLatency/(numBit/interface_width);
-			readLatency = avgBitReadLatency*numRead;
-			writeLatency = avgBitWriteLatency*numWrite;
+			wlDecoder.CalculateLatency(1e20, wDff * interface_width * 0.2e-15/1e-6, NULL, (double) numBit/interface_width, (double) numBit/interface_width);
+			readWholeLatency += wlDecoder.readLatency;
+			readWholeLatency += ((double) 1/clkFreq/2)*((double) numBit/interface_width);  // assume dff need half clock cycle to access
+			writeWholeLatency += wlDecoder.writeLatency + ((double) 1/clkFreq/2)*((double) numBit/interface_width);
 		}
+		avgBitReadLatency = (double) readWholeLatency/(numBit/interface_width);     // average latency per line(sec/line)
+		avgBitWriteLatency = (double) writeWholeLatency/(numBit/interface_width);
+		readLatency = avgBitReadLatency*numRead;
+		writeLatency = avgBitWriteLatency*numWrite;
 	}
 }
 
@@ -193,13 +197,23 @@ void Buffer::CalculatePower(double numAccessBitRead, double numRead, double numA
 			writeWholeDynamicEnergy += wlDecoder.writeDynamicEnergy + precharger.writeDynamicEnergy + sramWriteDriver.writeDynamicEnergy;
 			leakage += wlDecoder.leakage + precharger.leakage + sramWriteDriver.leakage + senseAmp.leakage;
 		} else {
+			dffDynamicEnergy = 0;
 			wlDecoder.CalculatePower(numBit/interface_width, numBit/interface_width);
-			dff.CalculatePower(1, numBit, false);
+			// Assume input D=1 and the energy of CLK INV and CLK TG are for 1 clock cycles
+			// CLK INV (all DFFs have energy consumption)
+			dffDynamicEnergy += (capInvInput + capInvOutput) * tech.vdd * tech.vdd * 4 * numBit;
+			// CLK TG (all DFFs have energy consumption)
+			dffDynamicEnergy += capTgGateN * tech.vdd * tech.vdd * 2 * numBit;
+			dffDynamicEnergy += capTgGateP * tech.vdd * tech.vdd * 2 * numBit;
+			// D to Q path (only selected DFFs have energy consumption)
+			dffDynamicEnergy += (capTgDrain * 3 + capInvInput) * tech.vdd * tech.vdd * numBit;	    // D input side
+			dffDynamicEnergy += (capTgDrain  + capInvOutput) * tech.vdd * tech.vdd * numBit;	    // D feedback side
+			dffDynamicEnergy += (capInvInput + capInvOutput) * tech.vdd * tech.vdd * numBit;	    // Q output side
 			
-			readWholeDynamicEnergy += wlDecoder.readDynamicEnergy + dff.readDynamicEnergy;
-			writeWholeDynamicEnergy += wlDecoder.writeDynamicEnergy + dff.writeDynamicEnergy;
+			readWholeDynamicEnergy += wlDecoder.readDynamicEnergy + dffDynamicEnergy;
+			writeWholeDynamicEnergy += wlDecoder.writeDynamicEnergy + dffDynamicEnergy;
 			
-			leakage += dff.leakage;
+			leakage += CalculateGateLeakage(INV, 1, widthInvN, widthInvP, inputParameter.temperature, tech) * tech.vdd * 8 * numBit;
 			leakage += wlDecoder.leakage;
 		}
 		avgBitReadDynamicEnergy = readWholeDynamicEnergy/numBit;

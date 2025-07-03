@@ -40,12 +40,9 @@
 #include <iostream>
 #include "constant.h"
 #include "formula.h"
-#include "Param.h"
 #include "MultilevelSAEncoder.h"
 
 using namespace std;
-
-extern Param *param;
 
 MultilevelSAEncoder::MultilevelSAEncoder(const InputParameter& _inputParameter, const Technology& _tech, const MemCell& _cell): inputParameter(_inputParameter), tech(_tech), cell(_cell), FunctionUnit() {
 	initialized = false;
@@ -64,9 +61,6 @@ void MultilevelSAEncoder::Initialize(int _numLevel, int _numEncoder){
 	widthInvP = tech.pnSizeRatio * MIN_NMOS_SIZE * tech.featureSize;
 	widthNandN = 2 * MIN_NMOS_SIZE * tech.featureSize;
 	widthNandP = tech.pnSizeRatio * MIN_NMOS_SIZE * tech.featureSize;
-
-	EnlargeSize(&widthInvN, &widthInvP, tech.featureSize*MAX_TRANSISTOR_HEIGHT, tech);
-	EnlargeSize(&widthNandN, &widthNandP, tech.featureSize*MAX_TRANSISTOR_HEIGHT, tech);
 
 	initialized = true;
 }
@@ -195,10 +189,6 @@ void MultilevelSAEncoder::CalculatePower(double numRead) {
 		readDynamicEnergy += (capNandInput + capNandOutput) * tech.vdd * tech.vdd * (numLevel+numGate) * numEncoder;
 		readDynamicEnergy += (capNandLgInput + capNandLgOutput) * tech.vdd * tech.vdd * numGate * numEncoder;
 		readDynamicEnergy *= numRead;
-		
-		if(param->validated){
-			readDynamicEnergy *= param->epsilon; 	// switching activity of control circuits, epsilon = 0.05 by default
-		}
 		
 		if (!readLatency) {
 			//cout << "[MultilevelSenseAmp] Error: Need to calculate read latency first" << endl;

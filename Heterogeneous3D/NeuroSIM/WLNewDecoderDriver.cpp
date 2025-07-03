@@ -44,12 +44,9 @@
 #include <iostream>
 #include "constant.h"
 #include "formula.h"
-#include "Param.h"
 #include "WLNewDecoderDriver.h"
 
 using namespace std;
-
-extern Param *param;
 
 WLNewDecoderDriver::WLNewDecoderDriver(const InputParameter& _inputParameter, const Technology& _tech, const MemCell& _cell): inputParameter(_inputParameter), tech(_tech), cell(_cell), FunctionUnit(){
 	initialized = false;
@@ -73,17 +70,14 @@ void WLNewDecoderDriver::Initialize(int _numWLRow) {
 	// NAND2
 	widthNandN = 2 * MIN_NMOS_SIZE * tech.featureSize;
     widthNandP = tech.pnSizeRatio * MIN_NMOS_SIZE * tech.featureSize;
-	EnlargeSize(&widthNandN, &widthNandP, tech.featureSize*MAX_TRANSISTOR_HEIGHT, tech);
 	
 	// INV
 	widthInvN = MIN_NMOS_SIZE * tech.featureSize;
 	widthInvP = tech.pnSizeRatio * MIN_NMOS_SIZE * tech.featureSize;
-	EnlargeSize(&widthInvN, &widthInvP, tech.featureSize*MAX_TRANSISTOR_HEIGHT, tech);
 	
 	// Transmission Gate
 	widthTgN = MIN_NMOS_SIZE * tech.featureSize;
 	widthTgP = tech.pnSizeRatio * MIN_NMOS_SIZE * tech.featureSize;
-	EnlargeSize(&widthTgN, &widthTgP, tech.featureSize*MAX_TRANSISTOR_HEIGHT, tech);
 
 	initialized = true;
 }
@@ -152,8 +146,8 @@ void WLNewDecoderDriver::CalculateArea(double _newHeight, double _newWidth, Area
 		// Resistance
 		// TG
 		double resTgN, resTgP;
-		resTgN = CalculateOnResistance(widthTgN, NMOS, inputParameter.temperature, tech)*LINEAR_REGION_RATIO;
-		resTgP = CalculateOnResistance(widthTgP, PMOS, inputParameter.temperature, tech)*LINEAR_REGION_RATIO;
+		resTgN = CalculateOnResistance(widthTgN, NMOS, inputParameter.temperature, tech);
+		resTgP = CalculateOnResistance(widthTgP, PMOS, inputParameter.temperature, tech);
 		resTg = 1/(1/resTgN + 1/resTgP);
 
 		// Capacitance

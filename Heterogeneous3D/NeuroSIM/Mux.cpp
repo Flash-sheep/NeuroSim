@@ -60,18 +60,14 @@ void Mux::Initialize(int _numInput, int _numSelection, double _resTg, bool _FPGA
 	if (FPGA) {	// Assume digital Mux has standard NMOS and PMOS width
 		widthTgN = MIN_NMOS_SIZE * tech.featureSize;
 		widthTgP = tech.pnSizeRatio * MIN_NMOS_SIZE * tech.featureSize;
-		EnlargeSize(&widthTgN, &widthTgP, tech.featureSize*MAX_TRANSISTOR_HEIGHT, tech);
-		resTg = 1 / (1/CalculateOnResistance(widthTgN, NMOS, 300, tech)/LINEAR_REGION_RATIO 
-					+ 1/CalculateOnResistance(widthTgP, PMOS, 300, tech)/LINEAR_REGION_RATIO);
+		resTg = 1 / (1/CalculateOnResistance(widthTgN, NMOS, inputParameter.temperature, tech) 
+					+ 1/CalculateOnResistance(widthTgP, PMOS, inputParameter.temperature, tech));
 	} else {
 		resTg = _resTg * IR_DROP_TOLERANCE;
-		widthTgN = CalculateOnResistance(tech.featureSize, NMOS, 300, tech)
+		widthTgN = CalculateOnResistance(tech.featureSize, NMOS, inputParameter.temperature, tech)
 								* tech.featureSize * LINEAR_REGION_RATIO/ (resTg*2);
-		widthTgP = CalculateOnResistance(tech.featureSize, PMOS, 300, tech)
+		widthTgP = CalculateOnResistance(tech.featureSize, PMOS, inputParameter.temperature, tech)
 								* tech.featureSize * LINEAR_REGION_RATIO/ (resTg*2);
-		EnlargeSize(&widthTgN, &widthTgP, tech.featureSize*MAX_TRANSISTOR_HEIGHT, tech);
-		resTg = 1 / (1/CalculateOnResistance(widthTgN, NMOS, 300, tech)/LINEAR_REGION_RATIO 
-					+ 1/CalculateOnResistance(widthTgP, PMOS, 300, tech)/LINEAR_REGION_RATIO);
 	}
 	initialized = true;
 }
@@ -171,7 +167,6 @@ void Mux::CalculateLatency(double _rampInput, double _capLoad, double numRead) {
 
 		// TG
 		tr = resTg*2 * (capTgDrain + 0.5*capTgGateN + 0.5*capTgGateP + capLoad);	// Calibration: use resTg*2 (only one transistor is transmitting signal in the pass gate) may be more accurate, and include gate cap because the voltage at the source of NMOS and drain of PMOS is changing (assuming Cg = 0.5Cgs + 0.5Cgd)
-
 		readLatency += 2.3 * tr;	// 2.3 means charging from 0% to 90%
 		readLatency *= numRead;
 	}

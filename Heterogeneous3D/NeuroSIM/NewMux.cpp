@@ -62,7 +62,6 @@ void NewMux::Initialize(int _numInput){
 	
 	widthTgN = MIN_NMOS_SIZE * tech.featureSize;
 	widthTgP = tech.pnSizeRatio * MIN_NMOS_SIZE * tech.featureSize;
-	EnlargeSize(&widthTgN, &widthTgP, tech.featureSize*MAX_TRANSISTOR_HEIGHT, tech);
 	
 	initialized = true;
 }

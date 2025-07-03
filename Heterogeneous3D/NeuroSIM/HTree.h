@@ -55,7 +55,7 @@ public:
 
 	/* Functions */
 	void PrintProperty(const char* str);
-	void Initialize(int _numRow, int _numCol, double _delaytolerance, double _busWidth, double _clkFreq);
+	void Initialize(int _numRow, int _numCol, double _delaytolerance, double _busWidth);
 	void CalculateArea(double unitHeight, double unitWidth, double foldedratio);
 	void CalculateLatency(int x_init, int y_init, int x_end, int y_end, double unitHeight, double unitWidth, double numRead);
 	void CalculatePower(int x_init, int y_init, int x_end, int y_end, double unitHeight, double unitWidth, double numBitAccess, double numRead);
@@ -73,7 +73,7 @@ public:
 	double unitLatencyRep, unitLatencyWire, unitLengthLeakage, unitLengthEnergyRep, unitLengthEnergyWire;
 	double find_stage;
 	int x_center, y_center, hit, skipVer;
-	double clkFreq;
+
 };
 
 #endif /* HTREE_H_ */

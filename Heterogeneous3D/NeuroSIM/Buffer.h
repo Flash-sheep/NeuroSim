@@ -48,7 +48,6 @@
 #include "Precharger.h"
 #include "SenseAmp.h"
 #include "SRAMWriteDriver.h"
-#include "DFF.h"
 
 using namespace std;
 
@@ -85,7 +84,6 @@ public:
 	Precharger precharger;
 	SRAMWriteDriver sramWriteDriver;
 	SenseAmp senseAmp;
-	DFF dff;
 };
 
 #endif /* BUFFER_H_ */

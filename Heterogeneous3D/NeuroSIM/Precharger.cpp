@@ -57,13 +57,10 @@ void Precharger::Initialize(int _numCol, double _resLoad, double _activityColWri
 	activityColWrite = _activityColWrite;
 	numReadCellPerOperationNeuro = _numReadCellPerOperationNeuro;
 	numWriteCellPerOperationNeuro = _numWriteCellPerOperationNeuro;
-
-	double temp = 0;
+	
 	widthPMOSBitlineEqual = MIN_NMOS_SIZE * tech.featureSize;
-	EnlargeSize(&temp, &widthPMOSBitlineEqual, tech.featureSize*MAX_TRANSISTOR_HEIGHT, tech);
 	widthPMOSBitlinePrecharger = 6 * tech.featureSize;
-	EnlargeSize(&temp, &widthPMOSBitlinePrecharger, tech.featureSize*MAX_TRANSISTOR_HEIGHT, tech);
-
+	
 	initialized = true;
 }
 
@@ -161,6 +158,7 @@ void Precharger::CalculatePower(double numRead, double numWrite) {
 		// Read
 		readDynamicEnergy = capLoad * tech.vdd * tech.vdd * MIN(numReadCellPerOperationNeuro, numCol) * 2;   // BL and BL_bar
 		readDynamicEnergy *= numRead;
+		
 		// Write
 		writeDynamicEnergy = capLoad * tech.vdd * tech.vdd * MIN(numWriteCellPerOperationNeuro, numCol*activityColWrite);
 		writeDynamicEnergy *= numWrite;

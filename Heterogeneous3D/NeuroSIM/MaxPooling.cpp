@@ -36,30 +36,25 @@
 *   Xiaochen Peng   Email: xpeng15 at asu dot edu
 ********************************************************************************/
 
-#include <cmath>
 #include <iostream>
 #include "constant.h"
 #include "formula.h"
-#include "Param.h"
 #include "MaxPooling.h"
 
 
 using namespace std;
 
-extern Param *param;
-
 MaxPooling::MaxPooling(const InputParameter& _inputParameter, const Technology& _tech, const MemCell& _cell): inputParameter(_inputParameter), tech(_tech), cell(_cell), comparator(_inputParameter, _tech, _cell), FunctionUnit() {
 	initialized = false;
 }
 
-void MaxPooling::Initialize(int _numBit, int _window, int _numMaxPooling, double _clkFreq) {    // able to assign multiple MPU to operate in parallel
+void MaxPooling::Initialize(int _numBit, int _window, int _numMaxPooling) {    // able to assign multiple MPU to operate in parallel
 	if (initialized)
 		cout << "[MaxPooling] Warning: Already initialized!" << endl;
 	
 	numBit = _numBit;                 // # of comparing elements
 	window = _window;                  // window size of max pool
 	numMaxPooling = _numMaxPooling;   // # of Max Pooling Unit (MPU)
-	clkFreq = _clkFreq;
 	
 	numComparator = 0;                // initialize the # of N-bit comparator in each MPU
 	numStage = 0;                     // # of N-bit comparator stage in each MPU
@@ -78,22 +73,18 @@ void MaxPooling::Initialize(int _numBit, int _window, int _numMaxPooling, double
 	// INV
 	widthInvN = MIN_NMOS_SIZE * tech.featureSize;
 	widthInvP = tech.pnSizeRatio * MIN_NMOS_SIZE * tech.featureSize;
-	EnlargeSize(&widthInvN, &widthInvP, tech.featureSize*MAX_TRANSISTOR_HEIGHT, tech);
 	
 	// NAND
 	widthNandN = 2*MIN_NMOS_SIZE * tech.featureSize;
 	widthNandP = tech.pnSizeRatio * MIN_NMOS_SIZE * tech.featureSize;
-	EnlargeSize(&widthNandN, &widthNandP, tech.featureSize*MAX_TRANSISTOR_HEIGHT, tech);
 	
 	// NOR1
 	widthNorN = 4*MIN_NMOS_SIZE * tech.featureSize;
 	widthNorP = tech.pnSizeRatio * MIN_NMOS_SIZE * tech.featureSize;
-	EnlargeSize(&widthNorN, &widthNorP, tech.featureSize*MAX_TRANSISTOR_HEIGHT, tech);
 	
 	// NOR2 (numBit-1) inputs
 	widthNorN2 = (numBit*2)*MIN_NMOS_SIZE * tech.featureSize;
 	widthNorP2 = tech.pnSizeRatio * MIN_NMOS_SIZE * tech.featureSize;
-	EnlargeSize(&widthNorN2, &widthNorP2, tech.featureSize*MAX_TRANSISTOR_HEIGHT, tech);
 
 	// 1-bit Comparator
 	comparator.Initialize(1, 1);    // initialize single comparator
@@ -197,10 +188,6 @@ void MaxPooling::CalculateLatency(double _rampInput, double _capLoad, double num
 		beta = 1 / (resTG * gm);
 		readLatency += horowitz(tr, beta, rampINVOutput, &rampTGOutput);
 		
-		if (param->synchronous) { 
-			readLatency = ceil(readLatency*clkFreq);
-		}
-		
 		readLatency *= numStage;
 		readLatency *= numRead;
 	}
@@ -226,11 +213,6 @@ void MaxPooling::CalculatePower(double numRead) {
 		readDynamicEnergy += (capInvInput + capInvOutput) * tech.vdd * tech.vdd * 2;
 		// NOR2
 		readDynamicEnergy += (capNor2Input + capInvOutput) * tech.vdd * tech.vdd;
-		
-		if(param->validated){
-			readDynamicEnergy *= param->epsilon; 	// switching activity of control circuits, epsilon = 0.05 by default
-		}
-		
 		readDynamicEnergy += comparator.readDynamicEnergy * numBit/2;   // assume the comparator will go to the half way and stop
 
 		readDynamicEnergy *= numComparator;    // need *numComparator N-bit comparator

@@ -56,7 +56,7 @@ public:
 
 	/* Functions */
 	void PrintProperty(const char* str);
-	void Initialize(int _numBit, int _window, int _numMaxPooling, double _clkFreq);
+	void Initialize(int _numBit, int _window, int _numMaxPooling);
 	void CalculateUnitArea(AreaModify _option);
 	void CalculateArea(double widthArray);
 	void CalculateLatency(double _rampInput, double _capLoad, double numRead);
@@ -71,7 +71,7 @@ public:
 	double widthInvN, widthInvP, widthNandN, widthNandP, widthNorN, widthNorP, widthNorN2, widthNorP2;
 	double rampInput;
     double areaUnit;
-	double clkFreq;
+	
 	Comparator comparator;
 };
 

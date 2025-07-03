@@ -39,12 +39,9 @@
 #include <iostream>
 #include "constant.h"
 #include "formula.h"
-#include "Param.h"
 #include "Comparator.h"
 
 using namespace std;
-
-extern Param *param;
 
 Comparator::Comparator(const InputParameter& _inputParameter, const Technology& _tech, const MemCell& _cell): inputParameter(_inputParameter), tech(_tech), cell(_cell), FunctionUnit() {
 	initialized = false;
@@ -60,17 +57,14 @@ void Comparator::Initialize(int _numBit, int _numComparator) {
 	// INV
 	widthInvN = MIN_NMOS_SIZE * tech.featureSize;
 	widthInvP = tech.pnSizeRatio * MIN_NMOS_SIZE * tech.featureSize;
-	EnlargeSize(&widthInvN, &widthInvP, tech.featureSize*MAX_TRANSISTOR_HEIGHT, tech);
 
 	// NAND2
 	widthNand2N = 2 * MIN_NMOS_SIZE * tech.featureSize;
 	widthNand2P = tech.pnSizeRatio * MIN_NMOS_SIZE * tech.featureSize;
-	EnlargeSize(&widthNand2N, &widthNand2P, tech.featureSize*MAX_TRANSISTOR_HEIGHT, tech);
 
 	// NAND3
 	widthNand3N = 3 * MIN_NMOS_SIZE * tech.featureSize;
 	widthNand3P = tech.pnSizeRatio * MIN_NMOS_SIZE * tech.featureSize;
-	EnlargeSize(&widthNand3N, &widthNand3P, tech.featureSize*MAX_TRANSISTOR_HEIGHT, tech);
 
 	initialized = true;
 }
@@ -210,10 +204,6 @@ void Comparator::CalculatePower(double numRead, int numComparatorPerOperation) {
 		readDynamicEnergy += ((capNand3Input + capNand3Output) * 3) * tech.vdd * tech.vdd;
 
 		readDynamicEnergy *= numBit * MIN(numComparatorPerOperation, numComparator) * numRead;
-		
-		if(param->validated){
-			readDynamicEnergy *= param->epsilon; 	// switching activity of control circuits, epsilon = 0.05 by default
-		}
 	}
 }
 

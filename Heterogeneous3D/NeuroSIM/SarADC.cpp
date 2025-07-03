@@ -142,7 +142,11 @@ void SarADC::CalculatePower(const vector<double> &columnResistance, double numRe
 		for (double i=0; i<columnResistance.size(); i++) {
 			double E_Col = 0;
 			E_Col = GetColumnPower(columnResistance[i]);
-			readDynamicEnergy += E_Col;
+			if (columnResistance[i] == columnResistance[i]) {
+				readDynamicEnergy += E_Col;
+			} else {
+				readDynamicEnergy += 0;
+			}
 		}
 		readDynamicEnergy *= numRead;
 		
