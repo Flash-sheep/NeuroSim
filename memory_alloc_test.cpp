@@ -13,6 +13,22 @@
 
 enum class CacheType { KEY, VALUE };
 
+template <typename... Args>
+class MutableTuple {
+private:
+    std::tuple<Args...> data;
+
+public:
+    MutableTuple(Args... args) : data(std::make_tuple(args...)) {}
+
+    template <size_t Index>
+    auto& get() const{ return std::get<Index>(data); }
+
+    template <size_t Index, typename T>
+    void set(T&& value) { std::get<Index>(data) = std::forward<T>(value); }
+};
+
+
 using AG_mapping = std::unordered_map<
         std::string,
         std::unordered_map<
@@ -25,7 +41,7 @@ using AG_mapping = std::unordered_map<
                 >
             >
         >
-    >; //索引参数依次为 req_id head_id decoder_id 
+    >; //索引参数依次为 req_id head_id decoder_id cache_type
         //索引结果依次为subarray_id l_start l_end （该切片于原始decoder的输入位置） start_row/start_col end_row/end_col （subarray上实际的存储位置）
 
 using PE_storage_info = std::unordered_map<
@@ -33,11 +49,16 @@ using PE_storage_info = std::unordered_map<
         std::unordered_map<
             int,
             std::unordered_map<
-                CacheType,
-                std::unordered_set<int>
+                int,
+                std::unordered_map<
+                    CacheType,
+                    std::vector<MutableTuple<int,int,int>>
+                >
             >
         >
-    >;
+    >; //索引参数依次为 req_id head_id decoder_id cache_type
+        //索引结果为AG_id, l_start, l_end （该切片于原始decoder的输入位置）
+
 
 using Tile_storage_info = std::unordered_map<
         std::string,
@@ -120,6 +141,12 @@ public:
             subarrays_.emplace_back(std::make_unique<Subarray>(i));
             subarrays_queue_.insert({subarrays_.back()->mem_abl(), i}); // 使用multiset来维护可用的Subarray，按可用内存大小排序
         }
+
+        //初始化存储情况
+        for(int i =0;i<num_subarrays_;i++){
+            mem_abl_+=subarrays_[i]->mem_abl();
+        }
+        mem_opy_ = 0;
     }
     
     int id() const { return id_; }
@@ -232,10 +259,20 @@ public:
     }
     
     const auto& subarrays() const { return subarrays_; }
+
+    int mem_abl() const{
+        return mem_abl_;
+    }
+
+    int mem_opy() const{
+        return mem_opy_;
+    }
     
 private:
     int id_;
     int num_subarrays_;
+    int mem_abl_;
+    int mem_opy_;
     std::vector<std::unique_ptr<Subarray>> subarrays_;
     // std::priority_queue<std::unique_ptr<Subarray>> subarrays_queue_;
     std::multiset<std::pair<int,int>,std::greater<>> subarrays_queue_; // 使用multiset来维护可用的Subarray，按可用内存大小排序
@@ -255,6 +292,8 @@ private:
         
         int index = it->second;
         subarrays_[index]->allocate(size);
+        mem_abl_ -=size;
+        mem_opy_ +=size;
         
         // 更新优先队列
         subarrays_queue_.erase(it);
@@ -264,7 +303,7 @@ private:
 
     void updateSubarray(int index) {
         // 更新指定索引的Subarray的可用内存大小 目前暂时不考虑一个subarray上存储多个请求的情况，因此直接简单地增加一行即可
-        
+        //TODO 暂未将abl和opy区分开，没有考虑预留内存和实际内存
         subarrays_queue_.erase({subarrays_[index]->mem_abl(), index});
         
         subarrays_[index]->update_K(); // 更新Subarray的可用内存和已存储内存
@@ -282,20 +321,188 @@ private:
     }
 };
 
+// PE层级 - 存储decoder层信息
+class PE {
+public:
+    PE(int id, int num_AGs=4, int num_subarrays=64) : id_(id),num_AGs_(num_AGs), num_subarrays_(num_subarrays) {
+        // 初始化PE时可以添加一些默认的ArrayGroup
+        for (int i = 0; i < num_AGs_; ++i) { // 假设每个PE有4个ArrayGroup
+            array_groups_.emplace_back(std::make_unique<ArrayGroup>(i, num_subarrays_)); // 每个ArrayGroup有16个Subarray
+        }
+
+        for( int i =0;i<num_AGs_;i++){
+            mem_abl_+=array_groups_[i]->mem_abl();
+        }
+        mem_opy_ = 0;
+        
+    }
+    
+    void load_KV(
+        const std::string& request_id,
+        int head_id,
+        int decoder_layer,
+        CacheType cache_type,
+        int l_input,
+        int d_head
+    ) {
+        if (cache_type == CacheType::KEY) {
+            if (d_head != 128) {
+                throw std::invalid_argument("Key cache type requires d_head to be 128.");
+            } else {
+                //按照输入长度1024为单位进行切分
+                int i = 0;
+                while (l_input > 0) {
+                    int K_len = std::min(l_input, 1024); // 每次处理1024个输入
+                    l_input -= K_len;
+                    int l_start = i * 1024;
+                    int l_end = l_start + K_len - 1;
+                    
+
+                    // 寻找合适的ArrayGroup并分配内存
+                    int AG_id = find_AG(request_id,head_id,decoder_layer,cache_type,l_input,d_head);
+
+                    array_groups_[AG_id]->load_KV(request_id,head_id,decoder_layer,cache_type,l_start,l_end,d_head); //TODO 这里可以修改AG的逻辑，AG不需要存储l_start 和 l_end 信息
+                    
+
+                    // 更新PE存储信息
+                    add_storage_info(request_id, head_id, decoder_layer, cache_type,AG_id,l_start,l_end);
+                    
+                    i++;
+                }
+            }
+        } else {
+            throw std::invalid_argument("Unsupported cache type for loadKV.");
+        }
+    }
+
+    int id() const { return id_; }
+    
+    // 添加存储信息
+    void add_storage_info(
+        const std::string& request_id,
+        int head_id,
+        int decoder_layer,
+        CacheType cache_type,
+        int AG_id,
+        int l_start,
+        int l_end
+    ) {
+        storage_info_[request_id][head_id][decoder_layer][cache_type].push_back(MutableTuple<int,int,int>(AG_id,l_start,l_end));
+    }
+    
+    // 获取存储信息
+    const auto& storage_info() const { return storage_info_; }
+    
+    void print_storage_info() const {
+        for (const auto& [req_id, heads] : storage_info_) {
+            for (const auto& [head_id, decoders] : heads) {
+                for (const auto& [decoder_layer, cache_types] : decoders) {
+                    for (const auto& [cache_type, AGs] : cache_types) {
+                        std::cout << "Request: " << req_id << ", Head: " << head_id 
+                                  << ", Decoder Layer: " << decoder_layer 
+                                  << ", Cache Type: " << (cache_type == CacheType::KEY ? "KEY" : "VALUE") 
+                                  << ", AGs: "<<std::endl;
+
+                        std::cout<<"AG_id"<<" "<<"l_start"<<" "<<"l_end"<<std::endl;
+                        for (int i=0;i<AGs.size();i++) {
+                            std::cout << AGs[i].get<0>() << " "<<AGs[i].get<1>() << " "<<AGs[i].get<2>()<<std::endl;
+                        }
+                        std::cout << std::endl;
+                    }
+                }
+            }
+        }
+    }
+
+    // 删除指定请求的信息
+    void remove_request(const std::string& request_id) {
+        storage_info_.erase(request_id);
+        for (auto& group : array_groups_) {
+            group->remove_request(request_id);
+        }
+    }
+    
+    // 添加ArrayGroup
+    void add_array_group(std::unique_ptr<ArrayGroup> group) {
+        array_groups_.push_back(std::move(group));
+    }
+    
+    const auto& array_groups() const { return array_groups_; }
+    
+private:
+    int id_;
+    int num_AGs_;
+    int num_subarrays_;
+    int mem_abl_;
+    int mem_opy_;
+    std::vector<std::unique_ptr<ArrayGroup>> array_groups_;
+    
+    // 存储结构: request_id -> head_id -> cache_type -> set of decoder_layers
+    PE_storage_info storage_info_;
+
+    int find_AG(
+        const std::string& request_id,
+        int head_id,
+        int decoder_layer,
+        CacheType cache_type,
+        int l_input,
+        int d_head
+    ){
+        //从当前的4个AG中选择一个进行返回，分配规则
+        //1、容量满足
+        //2、不能将同一个decoder_layer的存在一起
+        //3、优先考虑将同一个head的存在一起
+        //4、优先考虑将同一个decoder_layer的KV存在一起
+
+        int size = l_input*d_head*16; //注意力头切片的大小
+
+        std::vector<int>candidates(num_AGs_);
+
+        for(int i =0;i<num_AGs_;i++){
+            if(array_groups_[i]->mem_abl()>=size) candidates.push_back(i);
+        }
+
+        int AG_id = 0;
+
+        if(candidates.empty()) throw std::runtime_error("No available subarrays.");
+        else{
+            AG_id =  candidates[0];//TODO 这里需要实现一个复杂的分配逻辑，但是可能需要简化。
+        }
+
+
+        mem_abl_-=size;
+        mem_opy_+=size;
+        return AG_id;
+        
+    }
+
+    // void allocate_AG(
+    //     const std::string& request_id,
+    //     int head_id,
+    //     int decoder_layer,
+    //     CacheType cache_type,
+    //     int l_start,
+    //     int l_end,
+    //     int d_head
+    // ){
+    //     array_groups_[AG_id]->load_KV(request_id,head_id,)
+    // }
+};
+
 int main(){
     // 测试Subarray和ArrayGroup的功能
-    ArrayGroup ag(0, 32); // 创建一个ArrayGroup，包含2个Subarray
+    PE ag(0, 4,32); // 创建一个ArrayGroup，包含2个Subarray
 
     try {
-        ag.load_KV("req1", 0, 0, CacheType::KEY, 0, 1024, 128);
+        ag.load_KV("req1", 0, 0, CacheType::KEY, 2048, 128);
         std::cout << "Loaded KV successfully." << std::endl;
         
-        ag.update_KV("req1", 0, 0, CacheType::KEY, 128);
-        std::cout << "Updated KV successfully." << std::endl;
+        // ag.update_KV("req1", 0, 0, CacheType::KEY, 128);
+        // std::cout << "Updated KV successfully." << std::endl;
 
-        ag.load_KV("req2", 0, 0, CacheType::KEY, 0, 1024, 128);
+        ag.load_KV("req2", 0, 0, CacheType::KEY, 2048, 128);
         
-        ag.print_mappings();
+        ag.print_storage_info();
     } catch (const std::exception& e) {
         std::cerr << "Error: " << e.what() << std::endl;
     }
