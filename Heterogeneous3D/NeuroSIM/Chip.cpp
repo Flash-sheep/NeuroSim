@@ -686,7 +686,18 @@ double ChipCalculatePerformance(InputParameter& inputParameter, Technology& tech
 	}
 	if(param->digital){
 		//KV缓存模拟 Chip级别的模拟，需要依次调用每个tile，计算其当前轮次需要的运行能效
-		
+		double tileReadLatency = 0;
+				double tileReadDynamicEnergy = 0;
+				double tilebufferLatency = 0;
+				double tilebufferDynamicEnergy = 0;
+				double tileicLatency = 0;
+				double tileicDynamicEnergy = 0;
+				double tileLatencyADC = 0;
+				double tileLatencyAccum = 0;
+				double tileLatencyOther = 0;
+				double tileEnergyADC = 0;
+				double tileEnergyAccum = 0;
+				double tileEnergyOther = 0;
 		TileCalculatePerformance(newMemory, newMemory, inputVector, 1, 0, 0, 1, 1,
 									1, 1, numInVector*param->numBitInput, cell, &tileReadLatency, &tileReadDynamicEnergy, &tileLeakage,
 									&tilebufferLatency, &tilebufferDynamicEnergy, &tileicLatency, &tileicDynamicEnergy, 

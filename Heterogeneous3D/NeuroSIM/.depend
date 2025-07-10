@@ -29,6 +29,8 @@ DeMux.o: DeMux.cpp constant.h formula.h Technology.h typedef.h DeMux.h \
  InputParameter.h MemCell.h FunctionUnit.h
 DFF.o: DFF.cpp constant.h formula.h Technology.h typedef.h Param.h DFF.h \
  InputParameter.h MemCell.h FunctionUnit.h
+DRAM.o: DRAM.cpp constant.h typedef.h formula.h Technology.h DRAM.h \
+ InputParameter.h MemCell.h FunctionUnit.h Param.h
 formula.o: formula.cpp constant.h formula.h Technology.h typedef.h
 FunctionUnit.o: FunctionUnit.cpp FunctionUnit.h
 HTree.o: HTree.cpp constant.h typedef.h formula.h Technology.h HTree.h \
@@ -110,6 +112,12 @@ TSVPath.o: TSVPath.cpp constant.h formula.h Technology.h typedef.h \
  Param.h TSVPath.h InputParameter.h MemCell.h FunctionUnit.h
 VoltageSenseAmp.o: VoltageSenseAmp.cpp constant.h formula.h Technology.h \
  typedef.h VoltageSenseAmp.h InputParameter.h MemCell.h FunctionUnit.h
+WeightGradientUnit.o: WeightGradientUnit.cpp constant.h formula.h \
+ Technology.h typedef.h WeightGradientUnit.h InputParameter.h MemCell.h \
+ FunctionUnit.h Adder.h AdderTree.h RowDecoder.h Mux.h DFF.h Precharger.h \
+ SenseAmp.h SRAMWriteDriver.h SwitchMatrix.h ShiftAdd.h \
+ MultilevelSenseAmp.h CurrentSenseAmp.h MultilevelSAEncoder.h SarADC.h \
+ Param.h
 WLDecoderOutput.o: WLDecoderOutput.cpp constant.h formula.h Technology.h \
  typedef.h WLDecoderOutput.h InputParameter.h MemCell.h FunctionUnit.h
 WLNewDecoderDriver.o: WLNewDecoderDriver.cpp constant.h formula.h \
