@@ -40,9 +40,12 @@
 #include <iostream>
 #include "constant.h"
 #include "formula.h"
+#include "Param.h"
 #include "Sigmoid.h"
 
 using namespace std;
+
+extern Param *param;
 
 Sigmoid::Sigmoid(const InputParameter& _inputParameter, const Technology& _tech, const MemCell& _cell): inputParameter(_inputParameter), tech(_tech), cell(_cell), mux(_inputParameter, _tech, _cell), muxDecoder(_inputParameter, _tech, _cell), wlDecoder(_inputParameter, _tech, _cell), colDecoder(_inputParameter, _tech, _cell), senseAmp(_inputParameter, _tech, _cell), colDecoderDriver(_inputParameter, _tech, _cell), voltageSenseAmp(_inputParameter, _tech, _cell), FunctionUnit() {
 	initialized = false;
@@ -171,6 +174,9 @@ void Sigmoid::CalculateLatency(double numRead) {
 			wlDecoder.CalculateLatency(1e20, 0, capCellAccess, 1, 1);
 			voltageSenseAmp.CalculateLatency(0, 1);
 			readLatency = wlDecoder.readLatency + voltageSenseAmp.readLatency;
+		}
+		if (param->synchronous) {
+			readLatency = ceil(readLatency*clkFreq);
 		}
 		readLatency *= numRead;
 	}

@@ -131,7 +131,7 @@ void SenseAmp::CalculateLatency(double numRead) {
 				+ CalculateTransconductance(W_SENSE_P * tech.featureSize, PMOS, tech);
 		double tau = capLoad / gm;
 		readLatency += tau * log(tech.vdd / senseVoltage);
-		readLatency += 1/clkFreq;   // Clock time for S/A enable
+		// readLatency += 1/clkFreq;   // Clock time for S/A enable
 
 		readLatency *= numRead;
 	}

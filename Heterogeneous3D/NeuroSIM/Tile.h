@@ -48,26 +48,20 @@
 #include "InputParameter.h"
 #include "Technology.h"
 #include "MemCell.h"
-
+ 
 using namespace std;
 
 /*** Functions ***/
-void TileInitialize(InputParameter& inputParameter, Technology& tech, MemCell& cell, double _numPENM, double _peSizeNM, double _numPECM, double _peSizeCM, bool digital);
-vector<double> TileCalculateArea(double numPE, double peSize, bool NMTile, double *height, double *width); //暂时不进行tile面积的计算
+void TileInitialize(InputParameter& inputParameter, Technology& tech, Technology& techTop, Technology& techBottom, MemCell& cell, double _numPENM, double _peSizeNM, double _numPECM, double _peSizeCM);
+vector<double> TileCalculateArea(double numPE, double peSize, bool NMTile, double *height, double *width);
 void TileCalculatePerformance(const vector<vector<double> > &newMemory, const vector<vector<double> > &oldMemory, const vector<vector<double> > &inputVector, 
-			int novelMap,bool digital , int seq_len, int seq_len_total, int layerNumber, double numPE, double peSize, //使用digital标志位表示使用数字计算的block，实际上可以添加控制位以支持其他类型的网络，目前只支持transformer  //使用seq_len_total来表示当前的序列总长度，由于tile内部对延迟和能耗的评估只与每一次的序列长度相关
-			int speedUpRow, int speedUpCol, int weightMatrixRow, int weightMatrixCol, int numInVector,  //在这里的控制策略， inputVector代表当前批次的输入token个数，用seq_len_total表示当前已生成的token总数
-			Technology& tech, MemCell& cell, double *readLatency, double *readDynamicEnergy, double *leakage,
-			double *readLatencyAG, double *readDynamicEnergyAG, double *writeLatencyWU, double *writeDynamicEnergyWU,
+			int novelMap, double numPE, double peSize, 
+			int speedUpRow, int speedUpCol, int weightMatrixRow, int weightMatrixCol, int numInVector, MemCell& cell, double *readLatency, double *readDynamicEnergy, double *leakage,
 			double *bufferLatency, double *bufferDynamicEnergy, double *icLatency, double *icDynamicEnergy,
-			double *coreLatencyADC, double *coreLatencyAccum, double *coreLatencyOther, double *coreEnergyADC, 
-			double *coreEnergyAccum, double *coreEnergyOther, double *readLatencyPeakFW, double *readDynamicEnergyPeakFW,
-			double *readLatencyPeakAG, double *readDynamicEnergyPeakAG, double *writeLatencyPeakWU, double *writeDynamicEnergyPeakWU);
+			double *coreLatencyADC, double *coreLatencyAccum, double *coreLatencyOther, double *coreEnergyADC, double *coreEnergyAccum, double *coreEnergyOther, bool CalculateclkFreq, double*clkPeriod);
 		
 vector<vector<double> > CopyPEArray(const vector<vector<double> > &orginal, int positionRow, int positionCol, int numRow, int numCol);
 vector<vector<double> > CopyPEInput(const vector<vector<double> > &orginal, int positionRow, int numInputVector, int numRow);
-std::vector<std::vector<int>> generateRandomMatrix(int rows, int cols);
-std::vector<std::vector<double>> generateRandomWeightMatrix(int rows, int cols);
-std::vector<std::vector<double>> generateOnesMatrix(int rows, int cols);
+	
 
 #endif /* TILE_H_ */

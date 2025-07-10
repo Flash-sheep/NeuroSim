@@ -40,9 +40,12 @@
 #include <iostream>
 #include "constant.h"
 #include "formula.h"
+#include "Param.h"
 #include "RowDecoder.h"
 
 using namespace std;
+
+extern Param *param;
 
 RowDecoder::RowDecoder(const InputParameter& _inputParameter, const Technology& _tech, const MemCell& _cell): inputParameter(_inputParameter), tech(_tech), cell(_cell), FunctionUnit(){
 	initialized = false;
@@ -93,16 +96,19 @@ void RowDecoder::Initialize(DecoderMode _mode, int _numAddrRow, bool _MUX, bool 
 	    // INV
 	    widthInvN = MIN_NMOS_SIZE * tech.featureSize;
 	    widthInvP = tech.pnSizeRatio * MIN_NMOS_SIZE * tech.featureSize;
+		EnlargeSize(&widthInvN, &widthInvP, tech.featureSize*MAX_TRANSISTOR_HEIGHT, tech);
 	    numInv = numAddrRow;	// The INV at outpur driver stage does not count here
 
 	    // NAND2
 	    widthNandN = 2 * MIN_NMOS_SIZE * tech.featureSize;
 	    widthNandP = tech.pnSizeRatio * MIN_NMOS_SIZE * tech.featureSize;
+		EnlargeSize(&widthNandN, &widthNandP, tech.featureSize*MAX_TRANSISTOR_HEIGHT, tech);
 	    numNand = 4 * (int)(floor(numAddrRow/2));
 
 	    // NOR (ceil(N/2) inputs)
 	    widthNorN = MIN_NMOS_SIZE * tech.featureSize;
 	    widthNorP = (int)ceil((double)numAddrRow/2) * tech.pnSizeRatio * MIN_NMOS_SIZE * tech.featureSize;
+		EnlargeSize(&widthNorN, &widthNorP, tech.featureSize*MAX_TRANSISTOR_HEIGHT, tech);
 	    if (numAddrRow > 2)
 		    numNor = pow(2, numAddrRow);
 	    else
@@ -115,8 +121,9 @@ void RowDecoder::Initialize(DecoderMode _mode, int _numAddrRow, bool _MUX, bool 
 		    numMetalConnection = 0;
 	
 	    // Output driver INV
-	    widthDriverInvN = 3 * MIN_NMOS_SIZE * tech.featureSize;
-	    widthDriverInvP = 3 * tech.pnSizeRatio * MIN_NMOS_SIZE * tech.featureSize;
+	    widthDriverInvN = 2 * MIN_NMOS_SIZE * tech.featureSize;
+	    widthDriverInvP = 2 * tech.pnSizeRatio * MIN_NMOS_SIZE * tech.featureSize;
+		// EnlargeSize(&widthDriverInvN, &widthDriverInvP, tech.featureSize*MAX_TRANSISTOR_HEIGHT, tech);
     }
 
 	initialized = true;
@@ -289,7 +296,7 @@ void RowDecoder::CalculateLatency(double _rampInput, double _capLoad1, double _c
 		double rampInvOutput = 1e20;
 		double rampNandOutput = 1e20;
 		double rampNorOutput = 1e20;
-		
+
 		// INV
 		resPullDown = CalculateOnResistance(widthInvN, NMOS, inputParameter.temperature, tech);	// doesn't matter pullup/pulldown?
 		if (numNand)
@@ -300,7 +307,6 @@ void RowDecoder::CalculateLatency(double _rampInput, double _capLoad1, double _c
 		beta = 1 / (resPullDown * gm);
 		readLatency += horowitz(tr, beta, rampInput, &rampInvOutput);
 		writeLatency += horowitz(tr, beta, rampInput, &rampInvOutput);
-		
 		if (!numNand)
 			rampOutput = rampInvOutput;
 
@@ -318,7 +324,7 @@ void RowDecoder::CalculateLatency(double _rampInput, double _capLoad1, double _c
 			if (!numNor)
 				rampOutput = rampNandOutput;
 		}
-		
+	
 		// NOR (ceil(N/2) inputs)
 		if (numNor) {
 			resPullUp = CalculateOnResistance(widthNorP, PMOS, inputParameter.temperature, tech) * 2;
@@ -342,21 +348,24 @@ void RowDecoder::CalculateLatency(double _rampInput, double _capLoad1, double _c
 			beta = 1 / (resPullDown * gm);
 			readLatency += horowitz(tr, beta, rampNorOutput, &rampNandOutput);
 			writeLatency += horowitz(tr, beta, rampNorOutput, &rampNandOutput);
+
 			// 2nd INV
-			resPullUp = CalculateOnResistance(widthInvP, PMOS, inputParameter.temperature, tech);
-			tr = resPullUp * (capInvOutput + capInvInput + capLoad1);
-			gm = CalculateTransconductance(widthInvP, PMOS, tech);
+			resPullUp = CalculateOnResistance(widthDriverInvP, PMOS, inputParameter.temperature, tech);
+			tr = resPullUp * (capDriverInvOutput + capDriverInvInput + capLoad1);
+			gm = CalculateTransconductance(widthDriverInvP, PMOS, tech);
 			beta = 1 / (resPullUp * gm);
 			readLatency += horowitz(tr, beta, rampNandOutput, &rampInvOutput);
 			writeLatency += horowitz(tr, beta, rampNandOutput, &rampInvOutput);
+
 			// 3rd INV
-			resPullDown = CalculateOnResistance(widthInvN, NMOS, inputParameter.temperature, tech);
-			tr = resPullDown * (capInvOutput + capLoad2);
-			gm = CalculateTransconductance(widthInvN, NMOS, tech);
+			resPullDown = CalculateOnResistance(widthDriverInvN, NMOS, inputParameter.temperature, tech);
+			tr = resPullDown * (capDriverInvOutput + capLoad2);
+			gm = CalculateTransconductance(widthDriverInvN, NMOS, tech);
 			beta = 1 / (resPullDown * gm);
 			readLatency += horowitz(tr, beta, rampInvOutput, &rampOutput);
 			writeLatency += horowitz(tr, beta, rampInvOutput, &rampOutput);
 			rampOutput = rampInvOutput;
+
 		} else {	// REGULAR: 2 INV as output driver
 			// 1st INV
 			resPullDown = CalculateOnResistance(widthDriverInvN, NMOS, inputParameter.temperature, tech);
@@ -430,19 +439,23 @@ void RowDecoder::CalculatePower(double numRead, double numWrite) {
 		
 		// Output driver or Mux enable circuit
 		if (MUX) {
-			readDynamicEnergy += (capNandOutput + capInvInput) * tech.vdd * tech.vdd;
-			readDynamicEnergy += (capInvOutput + capInvInput) * tech.vdd * tech.vdd;
-			readDynamicEnergy += capInvOutput * tech.vdd * tech.vdd;
+			readDynamicEnergy += (capNandOutput + capDriverInvInput) * tech.vdd * tech.vdd;
+			readDynamicEnergy += (capDriverInvOutput + capDriverInvInput) * tech.vdd * tech.vdd;
+			readDynamicEnergy += capDriverInvOutput * tech.vdd * tech.vdd;
 			
-			writeDynamicEnergy += (capNandOutput + capInvInput) * tech.vdd * tech.vdd;
-			writeDynamicEnergy += (capInvOutput + capInvInput) * tech.vdd * tech.vdd;
-			writeDynamicEnergy += capInvOutput * tech.vdd * tech.vdd;
+			writeDynamicEnergy += (capNandOutput + capDriverInvInput) * tech.vdd * tech.vdd;
+			writeDynamicEnergy += (capDriverInvOutput + capDriverInvInput) * tech.vdd * tech.vdd;
+			writeDynamicEnergy += capDriverInvOutput * tech.vdd * tech.vdd;
 		} else {
 			readDynamicEnergy += (capDriverInvInput + capDriverInvOutput) * tech.vdd * tech.vdd * 2;
 			writeDynamicEnergy += (capDriverInvInput + capDriverInvOutput) * tech.vdd * tech.vdd * 2;
 		}
 		readDynamicEnergy *= numRead;
 		writeDynamicEnergy *= numWrite;
+		
+		if(param->validated){
+			readDynamicEnergy *= param->epsilon; 	// switching activity of control circuits, epsilon = 0.05 by default
+		}
 	}
 }
 

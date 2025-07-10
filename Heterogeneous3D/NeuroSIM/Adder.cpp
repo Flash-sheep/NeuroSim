@@ -39,26 +39,31 @@
 #include <cmath>
 #include <iostream>
 #include "constant.h"
-#include "typedef.h"
 #include "formula.h"
+#include "Param.h"
 #include "Adder.h"
 
 using namespace std;
+
+extern Param *param;
 
 Adder::Adder(const InputParameter& _inputParameter, const Technology& _tech, const MemCell& _cell): inputParameter(_inputParameter), tech(_tech), cell(_cell), FunctionUnit() {
 	initialized = false;
 }
 
-void Adder::Initialize(int _numBit, int _numAdder){
+void Adder::Initialize(int _numBit, int _numAdder, double _clkFreq){
 	if (initialized)
 		cout << "[Adder] Warning: Already initialized!" << endl;
 	
 	numBit = _numBit;
 	numAdder = _numAdder;
+	clkFreq = _clkFreq;
 	
 	widthNandN = 2 * MIN_NMOS_SIZE * tech.featureSize;
 	widthNandP = tech.pnSizeRatio * MIN_NMOS_SIZE * tech.featureSize;
 
+	EnlargeSize(&widthNandN, &widthNandP, tech.featureSize*MAX_TRANSISTOR_HEIGHT, tech);
+	
 	initialized = true;
 }
 
@@ -79,14 +84,8 @@ void Adder::CalculateArea(double _newHeight, double _newWidth, AreaModify _optio
 			if (hAdder > _newHeight) {
 				cout << "[Adder] Error: A single adder height is even larger than the assigned height ! " << endl;
 			} else {
-				// Calculate the number of adder per column
-				int numAdderPerCol = (int)(_newHeight/hAdder);
-				if (numAdderPerCol > numAdder) {
-					numAdderPerCol = numAdder;
-				}
-				int numColAdder = (int)ceil((double)numAdder / numAdderPerCol);
 				height = _newHeight;
-				width = wAdder * numColAdder;
+				width = wAdder * hAdder * numAdder / _newHeight;
 			}
 		} else if (_newWidth && _option==NONE) { // Adder in multiple rows given the total width
 			hAdder = hNand * numBit;
@@ -95,14 +94,8 @@ void Adder::CalculateArea(double _newHeight, double _newWidth, AreaModify _optio
 			if (wAdder > _newWidth) {
 				cout << "[Adder] Error: A single adder width is even larger than the assigned width ! " << endl;
 			} else {
-				// Calculate the number of adder per row
-				int numAdderPerRow = (int)(_newWidth/wAdder);
-				if (numAdderPerRow > numAdder) {
-					numAdderPerRow = numAdder;
-				}
-				int numRowAdder = (int)ceil((double)numAdder / numAdderPerRow);
 				width = _newWidth;
-				height = hAdder * numRowAdder;
+				height = wAdder * hAdder * numAdder / _newWidth;
             }
 		} else {    // Assume one row of adder by default
 			hAdder = hNand;
@@ -201,7 +194,10 @@ void Adder::CalculateLatency(double _rampInput, double _capLoad, double numRead)
 		gm = CalculateTransconductance(widthNandN, NMOS, tech);
 		beta = 1 / (resPullDown * gm);
 		readLatency += horowitz(tr, beta, ramp[6], &ramp[7]);
-
+		
+		if (param->synchronous) {
+			readLatency  = ceil(readLatency*clkFreq);	//#cycles
+		}
 		readLatency *= numRead;
 		rampOutput = ramp[7];
 	}
@@ -237,9 +233,12 @@ void Adder::CalculatePower(double numRead, int numAdderPerOperation) {
 		readDynamicEnergy += (capNandOutput + capNandInput * 3) * tech.vdd * tech.vdd * (numBit-1);	// # 1
 		readDynamicEnergy += (capNandOutput + capNandInput) * tech.vdd * tech.vdd * (numBit-1);		// # 3
 		readDynamicEnergy += (capNandOutput + capNandInput) * tech.vdd * tech.vdd * 2 * (numBit-1);		// #6 and #7
-		
+	
 		readDynamicEnergy *= MIN(numAdderPerOperation, numAdder) * numRead;
-
+		
+		if(param->validated){
+				readDynamicEnergy *= param->delta; 	// switching activity of adder, delta = 0.15 by default
+		}
 	}
 }
 

@@ -58,6 +58,7 @@ void DecoderDriver::Initialize(int _mode, int _numOutput /* # of array rows/colu
 	// INV
 	widthInvN = MIN_NMOS_SIZE * tech.featureSize;
 	widthInvP = tech.pnSizeRatio * MIN_NMOS_SIZE * tech.featureSize;
+	EnlargeSize(&widthInvN, &widthInvP, tech.featureSize*MAX_TRANSISTOR_HEIGHT, tech);
 
 	// TG
 	resTg = cell.resMemCellOn / numLoad * IR_DROP_TOLERANCE;

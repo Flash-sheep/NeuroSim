@@ -58,6 +58,7 @@ void SRAMWriteDriver::Initialize(int _numCol, double _activityColWrite, int _num
 	
 	widthInvN = MIN_NMOS_SIZE * tech.featureSize;
 	widthInvP = tech.pnSizeRatio * MIN_NMOS_SIZE * tech.featureSize;
+	EnlargeSize(&widthInvN, &widthInvP, tech.featureSize*MAX_TRANSISTOR_HEIGHT, tech);
 	
 	initialized = true;
 }

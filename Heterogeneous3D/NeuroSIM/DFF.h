@@ -60,7 +60,7 @@ public:
 	void Initialize(int _numDff, double _clkFreq);
 	void CalculateArea(double _newHeight, double _newWidth, AreaModify _option);
 	void CalculateLatency(double _rampInput, double numRead);
-	void CalculatePower(double numRead, double numDffPerOperation);
+	void CalculatePower(double numRead, double numDffPerOperation, bool validated);
 
 	/* Properties */
 	bool initialized;	/* Initialization flag */
@@ -69,6 +69,7 @@ public:
 	double widthTgN, widthTgP, widthInvN, widthInvP;
 	double rampInput, rampOutput;
 	double clkFreq;
+	double hDff, wDff;
 };
 
 #endif /* DFF_H_ */

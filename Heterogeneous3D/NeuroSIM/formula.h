@@ -79,4 +79,5 @@ double CalculatePassGateArea(double widthNMOS, double widthPMOS, Technology tech
 
 double NonlinearResistance(double R, double NL, double Vw, double Vr, double V);
 
+void EnlargeSize(double *widthNMOS, double *widthPMOS, double heightTransistorRegion, Technology tech);
 #endif /* FORMULA_H_ */

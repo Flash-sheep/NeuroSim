@@ -52,7 +52,7 @@ Bus::Bus(const InputParameter& _inputParameter, const Technology& _tech, const M
 	initialized = false;
 }
 
-void Bus::Initialize(BusMode _mode, int _numRow, int _numCol, double _delaytolerance, double _busWidth, double _unitHeight, double _unitWidth){
+void Bus::Initialize(BusMode _mode, int _numRow, int _numCol, double _delaytolerance, double _busWidth, double _unitHeight, double _unitWidth, double _clkFreq){
 	if (initialized)
 		cout << "[Bus] Warning: Already initialized!" << endl;
 	
@@ -62,6 +62,8 @@ void Bus::Initialize(BusMode _mode, int _numRow, int _numCol, double _delaytoler
 	
 	unitHeight = _unitHeight;
 	unitWidth = _unitWidth;
+	
+	clkFreq = _clkFreq;
 
 	delaytolerance = _delaytolerance;
 	busWidth = _busWidth;
@@ -73,14 +75,14 @@ void Bus::Initialize(BusMode _mode, int _numRow, int _numCol, double _delaytoler
 	widthMinInvP = tech.pnSizeRatio * MIN_NMOS_SIZE * tech.featureSize;
 	CalculateGateArea(INV, 1, widthMinInvN, widthMinInvP, tech.featureSize * MAX_TRANSISTOR_HEIGHT, tech, &hMinInv, &wMinInv);
 	CalculateGateCapacitance(INV, 1, widthMinInvN, widthMinInvP, hMinInv, tech, &capMinInvInput, &capMinInvOutput);
-	double resOnRep = CalculateOnResistance(widthMinInvN, NMOS, inputParameter.temperature, tech) + CalculateOnResistance(widthMinInvP, PMOS, inputParameter.temperature, tech);
+	double resOnRep = CalculateOnResistance(widthMinInvN, NMOS, 300, tech) + CalculateOnResistance(widthMinInvP, PMOS, 300, tech);
 	
 	// optimal repeater design to achieve highest speed
 	repeaterSize = floor(sqrt(resOnRep*unitLengthWireCap/capMinInvInput/unitLengthWireResistance));
 	minDist = sqrt(2*resOnRep*(capMinInvOutput+capMinInvInput)/(unitLengthWireResistance*unitLengthWireCap));
 	CalculateGateArea(INV, 1, MIN_NMOS_SIZE * tech.featureSize * repeaterSize, tech.pnSizeRatio * MIN_NMOS_SIZE * tech.featureSize * repeaterSize, tech.featureSize * MAX_TRANSISTOR_HEIGHT, tech, &hRep, &wRep);
 	CalculateGateCapacitance(INV, 1, MIN_NMOS_SIZE * tech.featureSize * repeaterSize, tech.pnSizeRatio * MIN_NMOS_SIZE * tech.featureSize * repeaterSize, hRep, tech, &capRepInput, &capRepOutput);
-	resOnRep = CalculateOnResistance(MIN_NMOS_SIZE * tech.featureSize * repeaterSize, NMOS, inputParameter.temperature, tech) + CalculateOnResistance(tech.pnSizeRatio * MIN_NMOS_SIZE * tech.featureSize * repeaterSize, PMOS, inputParameter.temperature, tech);
+	resOnRep = CalculateOnResistance(MIN_NMOS_SIZE * tech.featureSize * repeaterSize, NMOS, 300, tech) + CalculateOnResistance(tech.pnSizeRatio * MIN_NMOS_SIZE * tech.featureSize * repeaterSize, PMOS, 300, tech);
 	double minUnitLengthDelay = 0.7*(resOnRep*(capRepInput+capRepOutput+unitLengthWireCap*minDist)+0.5*unitLengthWireResistance*minDist*unitLengthWireCap*minDist+unitLengthWireResistance*minDist*capRepInput)/minDist;
 	double maxUnitLengthEnergy = (capRepInput+capRepOutput+unitLengthWireCap*minDist)*tech.vdd*tech.vdd/minDist;
 	
@@ -92,7 +94,7 @@ void Bus::Initialize(BusMode _mode, int _numRow, int _numCol, double _delaytoler
 			minDist *= 0.9;
 			CalculateGateArea(INV, 1, MIN_NMOS_SIZE * tech.featureSize * repeaterSize, tech.pnSizeRatio * MIN_NMOS_SIZE * tech.featureSize * repeaterSize, tech.featureSize * MAX_TRANSISTOR_HEIGHT, tech, &hRep, &wRep);
 			CalculateGateCapacitance(INV, 1, MIN_NMOS_SIZE * tech.featureSize * repeaterSize, tech.pnSizeRatio * MIN_NMOS_SIZE * tech.featureSize * repeaterSize, hRep, tech, &capRepInput, &capRepOutput);
-			resOnRep = CalculateOnResistance(MIN_NMOS_SIZE * tech.featureSize * repeaterSize, NMOS, inputParameter.temperature, tech) + CalculateOnResistance(tech.pnSizeRatio * MIN_NMOS_SIZE * tech.featureSize * repeaterSize, PMOS, inputParameter.temperature, tech);
+			resOnRep = CalculateOnResistance(MIN_NMOS_SIZE * tech.featureSize * repeaterSize, NMOS, 300, tech) + CalculateOnResistance(tech.pnSizeRatio * MIN_NMOS_SIZE * tech.featureSize * repeaterSize, PMOS, 300, tech);
 			delay = 0.7*(resOnRep*(capRepInput+capRepOutput+unitLengthWireCap*minDist)+0.5*unitLengthWireResistance*minDist*unitLengthWireCap*minDist+unitLengthWireResistance*minDist*capRepInput)/minDist;
 			energy = (capRepInput+capRepOutput+unitLengthWireCap*minDist)*tech.vdd*tech.vdd/minDist;
 		}
@@ -152,7 +154,9 @@ void Bus::CalculateLatency(double numRead){
 		} else {
 			readLatency += wireLength*unitLatencyWire;
 		}
-		
+		if (param->synchronous) {
+			readLatency = ceil(readLatency*clkFreq);
+		}
 		readLatency *= numRead;	
 	}
 }

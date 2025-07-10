@@ -46,40 +46,46 @@ public:
 	int operationmode, operationmodeBack, memcelltype, accesstype, transistortype, deviceroadmap;      		
 	
 	double heightInFeatureSizeSRAM, widthInFeatureSizeSRAM, widthSRAMCellNMOS, widthSRAMCellPMOS, widthAccessCMOS, minSenseVoltage;
-	
+	 
 	double heightInFeatureSize1T1R, widthInFeatureSize1T1R, heightInFeatureSizeCrossbar, widthInFeatureSizeCrossbar;
 	
 	int relaxArrayCellHeight, relaxArrayCellWidth;
 	
-	bool globalBufferType, tileBufferType, peBufferType, chipActivation, reLu, novelMapping, pipeline, trainingEstimation, parallelBP, nonlinearIV, SARADC, currentMode;
-	int globalBufferCoreSizeRow, globalBufferCoreSizeCol, tileBufferCoreSizeRow, tileBufferCoreSizeCol;
+	bool globalBufferType, tileBufferType, peBufferType, chipActivation, reLu, novelMapping, pipeline, SARADC, currentMode, validated, synchronous, H3D;
+	int globalBufferCoreSizeRow, globalBufferCoreSizeCol, tileBufferCoreSizeRow, tileBufferCoreSizeCol;																								
 	
-	double clkFreq, featuresize, readNoise, resistanceOn, resistanceOff, maxConductance, minConductance, gateCapFeFET, polarization;
+	double clkFreq, featuresize, readNoise, resistanceOn, resistanceOff, maxConductance, minConductance;
 	int temp, technode, wireWidth, multipleCells;
+	/* for Heterogeneous 3D */
+	int technodeTop, deviceroadmapTop, technodeBottom, deviceroadmapBottom, numMemTier;
+	double featuresizeTop, featuresizeBottom, tsvPitch, tsvRes, tsvCap;
+	
 	double maxNumLevelLTP, maxNumLevelLTD, readVoltage, readPulseWidth, writeVoltage;
 	double accessVoltage, resistanceAccess;
-	double nonlinearity;
+	double nonlinearIV, nonlinearity;
 	double writePulseWidth, numWritePulse;
 	double globalBusDelayTolerance, localBusDelayTolerance;
 	double treeFoldedRatio, maxGlobalBusWidth;
 	double algoWeightMax, algoWeightMin;
-	double activityRowReadWG, activityRowWriteWG, activityColWriteWG;
-	double bufferOverHeadConstraint;
 	
 	int neuro, multifunctional, parallelWrite, parallelRead;
-	int numlut, numColMuxed, numWriteColMuxed, levelOutput, avgWeightBit, numBitInput, numRowMuxedAG, levelOutputAG, numRowMuxedWG, levelOutputWG;
-	int numRowSubArray, numColSubArray, numRowSubArrayWG, numColSubArrayWG, numRowSubArrayReal, numColSubArrayReal; // 原本的numRowSubArray 和 numColSubArray用来表征SubArray上可用于存储权重矩阵的大小，Real 表示实际的SubArray总大小
+	int numlut, numColMuxed, numWriteColMuxed, levelOutput, avgWeightBit, numBitInput;
+	int numRowSubArray, numColSubArray;
 	int cellBit, synapseBit;
-	int speedUpDegree, dramType, batchSize, numIteration;
+	int speedUpDegree;
 	
 	int XNORparallelMode, XNORsequentialMode, BNNparallelMode, BNNsequentialMode, conventionalParallel, conventionalSequential; 
 	int numRowPerSynapse, numColPerSynapse;
 	double AR, Rho, wireLengthRow, wireLengthCol, unitLengthWireResistance, wireResistanceRow, wireResistanceCol;
+	
+	double alpha, beta, gamma, delta, epsilon, zeta;
 
-	int d_model, d_k, d_v, n_heads, batch_size, max_length, d_hidden;
-	int input_len, output_len; //暂时只考虑一个query的情况，假设该query的输入长度和需求输出长度
-	int numDecoderBlock; // decoder block的个数
-	int digital; 
+	int digital;
+
+	int debug;
+
+	int numRowArrayForPE;
+	int numColArrayForPE;
 };
 
 #endif

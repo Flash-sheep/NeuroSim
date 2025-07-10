@@ -49,38 +49,28 @@
 #include <algorithm>
 #include "math.h"
 #include "Param.h"
+#include "constant.h"
 
 using namespace std;
 
 Param::Param() {
 	/***************************************** user defined design options and parameters *****************************************/
 
-	digital = 1; 				//在main函数中判断是否使用数字计算// 理论上在其他模块中也可以直接用这个来判断 
-								// 0: 模拟计算
-								// 1: 数字计算
-	d_model = 4096;
-	d_k = 128;
-	d_v = 128;
-	n_heads = 32;
-	batch_size = 50; 
-	max_length = 4096;
-	d_hidden = 11008;
-	 
-	input_len = 10; 			// 这里该如何设置？workLoad该如何选取
-	output_len = 500;
-	numDecoderBlock = 32;
+	debug = 1;
 
+	digital = 1;				// 0: analog computing
+								// 1: digital computing
 
-
+	
 
 	operationmode = 2;     		// 1: conventionalSequential (Use several multi-bit RRAM as one synapse)
 								// 2: conventionalParallel (Use several multi-bit RRAM as one synapse)
 	
-	memcelltype = 3;        	// 1: cell.memCellType = Type::SRAM
+	memcelltype = 2;        	// 1: cell.memCellType = Type::SRAM
 								// 2: cell.memCellType = Type::RRAM
 								// 3: cell.memCellType = Type::FeFET
 	
-	accesstype = 1;         	// 1: cell.accessType = CMOS_access
+	accesstype = 4;         	// 1: cell.accessType = CMOS_access
 								// 2: cell.accessType = BJT_access
 								// 3: cell.accessType = diode_access
 								// 4: cell.accessType = none_access (Crossbar Array)
@@ -105,25 +95,34 @@ Param::Param() {
 	
 	chipActivation = true;      // false: activation (reLu/sigmoid) inside Tile
 								// true: activation outside Tile
-								
+						 		
 	reLu = true;                // false: sigmoid
 								// true: reLu
 								
 	novelMapping = true;        // false: conventional mapping
 								// true: novel mapping
-	
+								
 	SARADC = false;              // false: MLSA
 	                            // true: sar ADC
 	currentMode = true;         // false: MLSA use VSA
 	                            // true: MLSA use CSA
-
+	
 	pipeline = false;            // false: layer-by-layer process --> huge leakage energy in HP
 								// true: pipeline process
 	speedUpDegree = 1;          // 1 = no speed up --> original speed
 								// 2 and more : speed up ratio, the higher, the faster
 								// A speed-up degree upper bound: when there is no idle period during each layer --> no need to further fold the system clock
 								// This idle period is defined by IFM sizes and data flow, the actual process latency of each layer may be different due to extra peripheries
-
+	
+	validated = true;			// false: no calibration factors
+								// true: validated by silicon data (wiring area in layout, gate switching activity, post-layout performance drop...)
+								
+	synchronous = false;			// false: asynchronous
+								// true: synchronous, clkFreq will be decided by sensing delay
+	
+	H3D = true;                 // false: conventional 2D
+	                            // true: heterogeneous 3D
+								
 	/*** algorithm weight range, the default wrapper (based on WAGE) has fixed weight range of (-1, 1) ***/
 	algoWeightMax = 1;
 	algoWeightMin = -1;
@@ -131,98 +130,87 @@ Param::Param() {
 	/*** conventional hardware design options ***/
 	clkFreq = 1e9;                      // Clock frequency
 	temp = 300;                         // Temperature (K)
-	// technode: 130, 90 --> wireWidth: 200
-	// technode: 65      --> wireWidth: 100
-	// technode: 45      --> wireWidth: 50
-	// technode: 32      --> wireWidth: 40
-	// technode: 22      --> wireWidth: 32
-	// technode: 14      --> wireWidth: 22
-	// technode: 10, 7   --> wireWidth: 14
+	// technode: 130	 --> wireWidth: 175
+	// technode: 90		 --> wireWidth: 110
+	// technode: 65      --> wireWidth: 105
+	// technode: 45      --> wireWidth: 80
+	// technode: 32      --> wireWidth: 56
+	// technode: 22      --> wireWidth: 40
+	// technode: 14      --> wireWidth: 25
+	// technode: 10, 7   --> wireWidth: 18e
 	technode = 32;                      // Technology
-	featuresize = 40e-9;                // Wire width for subArray simulation
+	featuresize = 14e-9;                // Wire width for subArray simulation TODO 这里40nm太大了，修改为24nm
+
+	
+	/* for Heterogeneous 3D */
+	deviceroadmapTop = 2;  
+	technodeTop = 14;
+	featuresizeTop = 40e-9;
+	deviceroadmapBottom = 2; 
+	technodeBottom = 7;
+	featuresizeBottom = 18e-9;
+	numMemTier = 8;
+	tsvPitch = 1.7e-6;
+	tsvRes = 0.3;
+	tsvCap = 20e-15;
+	
 	wireWidth = 40;                     // wireWidth of the cell for Accuracy calculation
 	globalBusDelayTolerance = 0.1;      // to relax bus delay for global H-Tree (chip level: communication among tiles), if tolerance is 0.1, the latency will be relax to (1+0.1)*optimalLatency (trade-off with energy)
 	localBusDelayTolerance = 0.1;       // to relax bus delay for global H-Tree (tile level: communication among PEs), if tolerance is 0.1, the latency will be relax to (1+0.1)*optimalLatency (trade-off with energy)
 	treeFoldedRatio = 4;                // the H-Tree is assumed to be able to folding in layout (save area)
-	maxGlobalBusWidth = 8192;           // the max buswidth allowed on chip level (just a upper_bound, the actual bus width is defined according to the auto floorplan)
+	maxGlobalBusWidth = 2048;           // the max buswidth allowed on chip level (just a upper_bound, the actual bus width is defined according to the auto floorplan)
+										// NOTE: Carefully choose this number!!!
+										// e.g. when use pipeline with high speedUpDegree, i.e. high throughput, need to increase the global bus width (interface of global buffer) --> guarantee global buffer speed
 
-	numRowSubArray = 512;               // # of rows in single subArray
-	numColSubArray = 512;               // # of columns in single subArray
-	numRowSubArrayReal = 512;
-	numColSubArrayReal = 1024;			// 理论上需要考虑中间结果区，但是考虑到简化处理就忽略了 TODO
-
-
+	numRowSubArray = 1024;               // # of rows in single subArray
+	numColSubArray = 1280;               // # of columns in single subArray
+	
 	/*** option to relax subArray layout ***/
 	relaxArrayCellHeight = 0;           // relax ArrayCellHeight or not
 	relaxArrayCellWidth = 0;            // relax ArrayCellWidth or not
 	
 	numColMuxed = 8;                    // How many columns share 1 ADC (for eNVM and FeFET) or parallel SRAM
-	levelOutput = 64;                  // # of levels of the multilevelSenseAmp output, should be in 2^N forms; e.g. 32 levels --> 5-bit ADC
-	cellBit = 5;                        // precision of memory device 
+	levelOutput = 2;                   // # of levels of the multilevelSenseAmp output, should be in 2^N forms; e.g. 32 levels --> 5-bit ADC
+	cellBit = 1;                        // precision of memory device 
 	
 	/*** parameters for SRAM ***/
 	// due the scaling, suggested SRAM cell size above 22nm: 160F^2
 	// SRAM cell size at 14nm: 300F^2
 	// SRAM cell size at 10nm: 400F^2
 	// SRAM cell size at 7nm: 600F^2
-	heightInFeatureSizeSRAM = 8;        // SRAM Cell height in feature size
-	widthInFeatureSizeSRAM = 20;        // SRAM Cell width in feature size
-	widthSRAMCellNMOS = 2.08;                              
-	widthSRAMCellPMOS = 1.23;
-	widthAccessCMOS = 1.31;
+	heightInFeatureSizeSRAM = 10;        // SRAM Cell height in feature size  
+	widthInFeatureSizeSRAM = 28;        // SRAM Cell width in feature size  
+	widthSRAMCellNMOS = 2;                            
+	widthSRAMCellPMOS = 1;
+	widthAccessCMOS = 1;
 	minSenseVoltage = 0.1;
 	
 	/*** parameters for analog synaptic devices ***/
 	heightInFeatureSize1T1R = 4;        // 1T1R Cell height in feature size
-	widthInFeatureSize1T1R = 4;       // 1T1R Cell width in feature size
+	widthInFeatureSize1T1R = 12;         // 1T1R Cell width in feature size
 	heightInFeatureSizeCrossbar = 2;    // Crossbar Cell height in feature size
 	widthInFeatureSizeCrossbar = 2;     // Crossbar Cell width in feature size
 	
-	resistanceOn = 240e3;               // Ron resistance at Vr in the reported measurement data (need to recalculate below if considering the nonlinearity)
-	resistanceOff = 240e3*100;           // Roff resistance at Vr in the reported measurement dat (need to recalculate below if considering the nonlinearity)
+	resistanceOn = 6e3;               // Ron resistance at Vr in the reported measurement data (need to recalculate below if considering the nonlinearity)
+	resistanceOff = 6e3*150;           // Roff resistance at Vr in the reported measurement dat (need to recalculate below if considering the nonlinearity)
 	maxConductance = (double) 1/resistanceOn;
 	minConductance = (double) 1/resistanceOff;
-	gateCapFeFET = 2.1717e-18;	        // Gate capacitance of FeFET (F)
-	polarization = 20;                  // polarization of FeFET (uC/cm^2)
-	maxNumLevelLTP = 60;	            // Maximum number of conductance states during LTP or weight increase
-	maxNumLevelLTD = 60;	            // Maximum number of conductance states during LTD or weight decrease
-	writeVoltage = 4;
-	writePulseWidth = 50e-9;
-	nonlinearIV = false; 				// This option is to consider I-V nonlinearity in cross-point array or not
-	nonlinearity = 10; 					// This is the nonlinearity for the current ratio at Vw and Vw/2
 	
 	readVoltage = 0.5;	                // On-chip read voltage for memory cell
 	readPulseWidth = 10e-9;             // read pulse width in sec
 	accessVoltage = 1.1;                // Gate voltage for the transistor in 1T1R
-	resistanceAccess = 15e3;            // resistance of access CMOS in 1T1R
+	resistanceAccess = resistanceOn*IR_DROP_TOLERANCE;            // resistance of access CMOS in 1T1R
+	writeVoltage = 1;					// Enable level shifer if writeVoltage > 1.5V
 	
-	
-	/****** design options for on-chip training ******/
-	/****** in training: we initialize bi-direction subArray to calculate forward and gradient calculation of activation ******/
-	/****** the gradient calculation of weight is processed in seperate hardware (SRAM array: since need frequent write and erase) ******/
-	
-	trainingEstimation = true; 		// false: only run estimation for inference chip
-										// true: run estimation for both inference and training on-chip
-	
-	parallelBP = true;          		// false: conventionalSequential (Use several multi-bit RRAM as one synapse)
-										// true: conventionalParallel (Use several multi-bit RRAM as one synapse)
-	
-	batchSize = 200;                    // batchSize in training
-	numIteration = 250;                 // num of iteration for one epoch
-	
-	bufferOverHeadConstraint = 1;       // N times of overhead of the original buffer designed for inference only
-										// For example: if N=3, the buffer size will be at most 4*original buffer size
-	
-	numRowSubArrayWG = 128;             // # of rows of single SRAM subArray in "gradient calculation of weight"
-	numColSubArrayWG = 128;             // # of columns of single SRAM subArray in "gradient calculation of weight"
-	
-	numRowMuxedAG = 8;                  // How many columns share 1 ADC (for Transpose array) in transpose subarray (gradient calculation of activation)
-	levelOutputAG = 64;                 // # of levels of the multilevelSenseAmp output, in transpose subarray (gradient calculation of activation)
-	numRowMuxedWG = 8;                  // How many columns share 1 ADC (for Transpose array) in gradient calculation of weight
-	levelOutputWG = 16;                 // # of levels of the multilevelSenseAmp output, in gradient calculation of weight
-
-	dramType = 2;                       // 1: GDDR5
-										// 2: HBM2
+	/*** Calibration parameters ***/
+	if(validated){
+		alpha = 1.44;	// wiring area of level shifter
+		beta = 1.4;  	// latency factor of sensing cycle
+		gamma = 0.5; 	// switching activity of DFF in shifter-add and accumulator
+		delta = 0.15; 	// switching activity of adder 
+		epsilon = 0.05; // switching activity of control circuits
+		zeta = 1.22; 	// post-layout energy increase
+	}		
 	
 	/***************************************** user defined design options and parameters *****************************************/
 	
@@ -248,8 +236,7 @@ Param::Param() {
 		case 3:	    BNNsequentialMode = 1;              break;     
 		case 2:	    conventionalParallel = 1;           break;     
 		case 1:	    conventionalSequential = 1;         break;     
-		case -1:	break;
-		default:	exit(-1);
+		default:	printf("operationmode ERROR\n");	exit(-1);
 	}
 	
 	/*** parallel read ***/
@@ -262,13 +249,14 @@ Param::Param() {
 	
 	/*** Initialize interconnect wires ***/
 	switch(wireWidth) {
-		case 200: 	AR = 2.10; Rho = 2.42e-8; break;  // for technode: 130, 90
-		case 100:	AR = 2.30; Rho = 2.73e-8; break;  // for technode: 65
-		case 50:	AR = 2.34; Rho = 3.91e-8; break;  // for technode: 45
-		case 40:	AR = 1.90; Rho = 4.03e-8; break;  // for technode: 32
-		case 32:	AR = 1.90; Rho = 4.51e-8; break;  // for technode: 22
-		case 22:	AR = 2.00; Rho = 5.41e-8; break;  // for technode: 14, 10
-		case 14:	AR = 2.10; Rho = 7.43e-8; break;  // for technode: 7
+		case 175: 	AR = 1.60; Rho = 2.20e-8; break;  // for technode: 130
+		case 110: 	AR = 1.60; Rho = 2.52e-8; break;  // for technode: 90
+		case 105:	AR = 1.70; Rho = 2.68e-8; break;  // for technode: 65
+		case 80:	AR = 1.70; Rho = 3.31e-8; break;  // for technode: 45
+		case 56:	AR = 1.80; Rho = 3.70e-8; break;  // for technode: 32
+		case 40:	AR = 1.90; Rho = 4.03e-8; break;  // for technode: 22
+		case 25:	AR = 2.00; Rho = 5.08e-8; break;  // for technode: 14
+		case 18:	AR = 2.00; Rho = 6.35e-8; break;  // for technode: 7, 10
 		case -1:	break;	// Ignore wire resistance or user define
 		default:	exit(-1); puts("Wire width out of range"); 
 	}

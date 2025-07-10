@@ -56,12 +56,13 @@ void DeMux::Initialize(int _numInput, int numRow){
 	// INV
 	widthInvN = MIN_NMOS_SIZE * tech.featureSize;
     widthInvP = tech.pnSizeRatio * MIN_NMOS_SIZE * tech.featureSize;
+	EnlargeSize(&widthInvN, &widthInvP, tech.featureSize*MAX_TRANSISTOR_HEIGHT, tech);
 
 	// TG
 	resTg = cell.resistanceOn / numRow * IR_DROP_TOLERANCE;
-	widthTgN = CalculateOnResistance(tech.featureSize, NMOS, inputParameter.temperature, tech)
+	widthTgN = CalculateOnResistance(tech.featureSize, NMOS, 300, tech)
 							* tech.featureSize / (resTg*2);
-	widthTgP = CalculateOnResistance(tech.featureSize, PMOS, inputParameter.temperature, tech)
+	widthTgP = CalculateOnResistance(tech.featureSize, PMOS, 300, tech)
 							* tech.featureSize / (resTg*2);
 
 	initialized = true;

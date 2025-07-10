@@ -40,9 +40,12 @@
 #include <iostream>
 #include "constant.h"
 #include "formula.h"
+#include "Param.h"
 #include "DFF.h"
 
 using namespace std;
+
+extern Param *param;
 
 DFF::DFF(const InputParameter& _inputParameter, const Technology& _tech, const MemCell& _cell): inputParameter(_inputParameter), tech(_tech), cell(_cell), FunctionUnit() {
 	initialized = false;
@@ -60,6 +63,9 @@ void DFF::Initialize(int _numDff, double _clkFreq){
 	widthInvN = MIN_NMOS_SIZE * tech.featureSize;
 	widthInvP = tech.pnSizeRatio * MIN_NMOS_SIZE * tech.featureSize;
 
+	EnlargeSize(&widthTgN, &widthTgP, tech.featureSize*MAX_TRANSISTOR_HEIGHT, tech); 
+	EnlargeSize(&widthInvN, &widthInvP, tech.featureSize*MAX_TRANSISTOR_HEIGHT, tech);
+	
 	initialized = true;
 }
 
@@ -67,7 +73,7 @@ void DFF::CalculateArea(double _newHeight, double _newWidth, AreaModify _option)
 	if (!initialized) {
 		cout << "[DFF] Error: Require initialization first!" << endl;
 	} else {
-		double hDffInv, wDffInv, hDff, wDff;
+		double hDffInv, wDffInv;
 		area = 0;
 		height = 0;
 		width = 0;
@@ -136,15 +142,17 @@ void DFF::CalculateLatency(double _rampInput, double numRead){
 	if (!initialized) {
 		cout << "[DFF] Error: Require initialization first!" << endl;
 	} else {
-		readLatency = 0;
-		rampInput = _rampInput;
-		
-		readLatency += 1/clkFreq/2;
-		readLatency *= numRead;
+		if (param->synchronous) {
+			readLatency = numRead;		//#cycles
+		} else {
+			rampInput = _rampInput;			
+			readLatency = 1/clkFreq/2;
+			readLatency *= numRead;
+		}
 	}
 }
 
-void DFF::CalculatePower(double numRead, double numDffPerOperation) {
+void DFF::CalculatePower(double numRead, double numDffPerOperation, bool validated) {
 	if (!initialized) {
 		cout << "[DFF] Error: Require initialization first!" << endl;
 	} else {
@@ -164,6 +172,10 @@ void DFF::CalculatePower(double numRead, double numDffPerOperation) {
 		readDynamicEnergy += (capInvInput + capInvOutput) * tech.vdd * tech.vdd * MIN(numDffPerOperation, numDff);	// Q output side
 
 		readDynamicEnergy *= numRead;
+		
+		if(validated){
+			readDynamicEnergy *= param->gamma; 	// switching activity of DFF in shifter-add and accumulator, gamma = 0.5 by default
+		}
 	}
 }
 

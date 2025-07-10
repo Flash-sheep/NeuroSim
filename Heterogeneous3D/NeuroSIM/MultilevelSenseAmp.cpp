@@ -80,6 +80,9 @@ void MultilevelSenseAmp::Initialize(int _numCol, int _levelOutput, double _clkFr
 		}
 		widthNmos = MIN_NMOS_SIZE * tech.featureSize;
 		widthPmos = tech.pnSizeRatio * MIN_NMOS_SIZE * tech.featureSize;
+		// Initialize SenseAmp
+		currentSenseAmp.Initialize((levelOutput-1)*numCol, false, false, clkFreq, numReadCellPerOperationNeuro);        // use real-traced mode ... 
+		
 		initialized = true;
 	}
 }
@@ -99,7 +102,11 @@ void MultilevelSenseAmp::CalculateArea(double heightArray, double widthArray, Ar
 		
 		if (widthArray && _option==NONE) {
 			if (currentMode) {
-				area = ((hNmos*wNmos)*48 + (hPmos*wPmos)*24)*(levelOutput-1)*numCol;
+				currentSenseAmp.CalculateUnitArea();
+				currentSenseAmp.CalculateArea(widthArray);
+				area = currentSenseAmp.area;
+				area += ((hNmos*wNmos)*9 + (hPmos*wPmos)*9)*(levelOutput-1)*numCol;
+				// area = ((hNmos*wNmos)*48 + (hPmos*wPmos)*24)*(levelOutput-1)*numCol;
 			} else {
 				area = ((hNmos*wNmos)*52 + (hPmos*wPmos)*60)*(levelOutput-1)*numCol;
 			}
@@ -107,7 +114,11 @@ void MultilevelSenseAmp::CalculateArea(double heightArray, double widthArray, Ar
 			height = area / width;
 		} else if (heightArray && _option==NONE) {
 			if (currentMode) {
-				area = ((hNmos*wNmos)*48 + (hPmos*wPmos)*24)*(levelOutput-1)*numCol;
+				currentSenseAmp.CalculateUnitArea();
+				currentSenseAmp.CalculateArea(widthArray);
+				area = currentSenseAmp.area;
+				area += ((hNmos*wNmos)*9 + (hPmos*wPmos)*9)*(levelOutput-1)*numCol;
+				// area = ((hNmos*wNmos)*48 + (hPmos*wPmos)*24)*(levelOutput-1)*numCol;
 			} else {
 				area = ((hNmos*wNmos)*52 + (hPmos*wPmos)*60)*(levelOutput-1)*numCol;
 			}
@@ -145,11 +156,7 @@ void MultilevelSenseAmp::CalculateLatency(const vector<double> &columnResistance
 		for (double j=0; j<columnResistance.size(); j++){
 			double T_Col = 0;
 			T_Col = GetColumnLatency(columnResistance[j]);
-			if (columnResistance[j] == columnResistance[j]) {
-				LatencyCol = max(LatencyCol, T_Col);
-			} else {
-				LatencyCol = LatencyCol;
-			}
+			LatencyCol = max(LatencyCol, T_Col);
 			if (LatencyCol < 1e-9) {
 				LatencyCol = 1e-9;
 			} else if (LatencyCol > 10e-9) {
@@ -178,11 +185,7 @@ void MultilevelSenseAmp::CalculatePower(const vector<double> &columnResistance, 
 		for (double j=0; j<columnResistance.size(); j++){
 			double T_Col = 0;
 			T_Col = GetColumnLatency(columnResistance[j]);
-			if (columnResistance[j] == columnResistance[j]) {
-				LatencyCol = max(LatencyCol, T_Col);
-			} else {
-				LatencyCol = LatencyCol;
-			}
+			LatencyCol = max(LatencyCol, T_Col);
 			if (LatencyCol < 1e-9) {
 				LatencyCol = 1e-9;
 			} else if (LatencyCol > 10e-9) {

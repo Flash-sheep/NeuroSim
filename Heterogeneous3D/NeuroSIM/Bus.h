@@ -56,7 +56,7 @@ public:
 	/* Functions */
 	void PrintProperty(const char* str);
 	void SaveOutput(const char* str);
-	void Initialize(BusMode _mode, int _numRow, int _numCol, double _delaytolerance, double _busWidth, double _unitHeight, double _unitWidth);
+	void Initialize(BusMode _mode, int _numRow, int _numCol, double _delaytolerance, double _busWidth, double _unitHeight, double _unitWidth, double _clkFreq);
 	void CalculateArea(double foldedratio, bool overLap);
 	void CalculateLatency(double numRead);
 	void CalculatePower(double numBitAccess, double numRead);
@@ -71,6 +71,7 @@ public:
 	double busWidth, delaytolerance, unitLengthWireCap, wireLength;
 	double unitLatencyRep, unitLatencyWire, unitLengthLeakage, unitLengthEnergyRep, unitLengthEnergyWire;
 	BusMode mode;
+	double clkFreq;
 };
 
 #endif /* BUS_H_ */

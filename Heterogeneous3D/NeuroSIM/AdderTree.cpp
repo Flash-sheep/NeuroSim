@@ -48,7 +48,7 @@ AdderTree::AdderTree(const InputParameter& _inputParameter, const Technology& _t
 	initialized = false;
 }
 
-void AdderTree::Initialize(int _numSubcoreRow, int _numAdderBit, int _numAdderTree) {
+void AdderTree::Initialize(int _numSubcoreRow, int _numAdderBit, int _numAdderTree, double _clkFreq) {
 	if (initialized)
 		cout << "[AdderTree] Warning: Already initialized!" << endl;
 	
@@ -56,6 +56,7 @@ void AdderTree::Initialize(int _numSubcoreRow, int _numAdderBit, int _numAdderTr
 	numStage = ceil(log2(numSubcoreRow));            // # of stage of the adder tree, used for CalculateLatency ...
 	numAdderBit = _numAdderBit;                      // # of input bits of the Adder
 	numAdderTree = _numAdderTree;                    // # of Adder Tree
+	clkFreq = _clkFreq;
 	
 	initialized = true;
 }
@@ -82,7 +83,8 @@ void AdderTree::CalculateArea(double _newHeight, double _newWidth, AreaModify _o
 			j = ceil(j/2);
 			i -= 1;
 		}
-		adder.Initialize(numAdderEachTree, numAdderTree);   
+		adder.Initialize(numAdderEachTree, numAdderTree, clkFreq);   
+		// dff.Initialize((numAdderBit+numStage)*numAdderTree, clkFreq);
 		
 		if (_newWidth && _option==NONE) {
 			adder.CalculateArea(NULL, _newWidth, NONE);
@@ -137,7 +139,7 @@ void AdderTree::CalculateLatency(double numRead, int numUnitAdd, double _capLoad
 
 		while (i != 0) {   // calculate the total # of full adder in each Adder Tree
 			numAdderEachStage = ceil(j/2);
-			adder.Initialize(numBitEachStage, numAdderEachStage);   
+			adder.Initialize(numBitEachStage, numAdderEachStage, clkFreq);   
 			adder.CalculateLatency(1e20, _capLoad, 1);
 			readLatency += adder.readLatency;
 			numBitEachStage += 1;
@@ -173,7 +175,7 @@ void AdderTree::CalculatePower(double numRead, int numUnitAdd) {
 		
 		while (i != 0) {  // calculate the total # of full adder in each Adder Tree
 			numAdderEachStage = ceil(j/2);
-			adder.Initialize(numBitEachStage, numAdderEachStage);     
+			adder.Initialize(numBitEachStage, numAdderEachStage, clkFreq);     
 			adder.CalculatePower(1, numAdderEachStage);	
 			readDynamicEnergy += adder.readDynamicEnergy;	
 			leakage += adder.leakage;

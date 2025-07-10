@@ -59,17 +59,21 @@ void WLDecoderOutput::Initialize(int _numWLRow, bool _multifunctional, bool _neu
 	// NOR2
 	widthNorN = MIN_NMOS_SIZE * tech.featureSize;
     widthNorP = 2 * tech.pnSizeRatio * MIN_NMOS_SIZE * tech.featureSize;
+	EnlargeSize(&widthNorN, &widthNorP, tech.featureSize*MAX_TRANSISTOR_HEIGHT, tech);
 	
 	// INV
 	widthInvN = MIN_NMOS_SIZE * tech.featureSize;
 	widthInvP = tech.pnSizeRatio * MIN_NMOS_SIZE * tech.featureSize;
+	EnlargeSize(&widthInvN, &widthInvP, tech.featureSize*MAX_TRANSISTOR_HEIGHT, tech);
 	
 	// TG
 	widthTgN = MIN_NMOS_SIZE * tech.featureSize;
 	widthTgP = tech.pnSizeRatio * MIN_NMOS_SIZE * tech.featureSize;
+	EnlargeSize(&widthTgN, &widthTgP, tech.featureSize*MAX_TRANSISTOR_HEIGHT, tech);
 
 	// NMOS
 	widthNmos = MIN_NMOS_SIZE * tech.featureSize;
+	EnlargeSize(&widthNmos, 0, tech.featureSize*MAX_TRANSISTOR_HEIGHT, tech);
 
 	initialized = true;
 }
