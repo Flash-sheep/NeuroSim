@@ -52,6 +52,7 @@
 #include "AdderTree.h"
 #include "Bus.h"
 #include "DFF.h"
+#include "util.h"
 
 using namespace std;
 
@@ -325,8 +326,87 @@ double ProcessingUnitCalculatePerformance(SubArray *subArray, const vector<vecto
 	
 	double subArrayReadLatency, subArrayReadDynamicEnergy, subArrayLeakage, subArrayLatencyADC, subArrayLatencyAccum, subArrayLatencyOther;
 
-	
-	if (arrayDupRow*arrayDupCol > 1) {
+
+	if(param->digital){
+		// 在数字存内计算模式下，每个PE管理4个AG，AG之间并行
+		// 目前先按照每个PE恰好存储一整个head，无需进行额外的管理
+
+		vector<vector<double>> fake_subarray_memory = generateRandomWeightMatrix(param->numRowSubArray, param->numColSubArray);
+		vector<double> fake_input_vector;
+		for(int i =0; i<param->num_AGs;i++){
+			//遍历每个AG
+			//理想情况下每个AG只会有2个并联的Subarray被调用
+			
+			int numberPerRow = 64; //每个subarray的行上理论上最多64个数，也就是乘加运算的操作次数
+			int rowActivated = 1024; //每个subarray存满为1024行，对于KV矩阵均如此
+
+			fake_input_vector.clear();
+			fake_input_vector.assign(rowActivated,1);
+			fake_input_vector.resize(param->numRowSubArray, 0); //填充到subarray的行数
+			
+			//对于V矩阵而言最后一行不一定塞满了，但是如果存储数据为0的话就可以和其余行一同计算
+
+			vector<double>columnResistance;
+			columnResistance = GetColumnResistance(fake_input_vector, fake_subarray_memory, cell, param->parallelRead, subArray->resCellAccess);
+
+
+			subArray->GetArrayEstimation(rowActivated,param->numColSubArray); //初始化计算片上的能耗
+			subArray->CalculateLatency(1e20, columnResistance, CalculateclkFreq);
+			if(CalculateclkFreq && (*clkPeriod < subArray->readLatency)){
+				*clkPeriod = subArray->readLatency;					//clk freq is decided by the longest sensing latency
+			}							
+			
+			if(!CalculateclkFreq){
+				subArray->CalculatePower(columnResistance);
+				*readDynamicEnergy += subArray->readDynamicEnergy; //由于并联需要翻倍
+				subArrayLeakage = subArray->leakage;
+
+				subArrayLatencyADC += subArray->readLatencyADC;			//sensing cycle
+				subArrayLatencyAccum += subArray->readLatencyAccum;		//#cycles
+				subArrayReadLatency += subArray->readLatency;		//#cycles + sensing cycle
+				subArrayLatencyOther += subArray->readLatencyOther;		
+				
+				*coreEnergyADC += subArray->readDynamicEnergyADC;
+				*coreEnergyAccum += subArray->readDynamicEnergyAccum;
+				*coreEnergyOther += subArray->readDynamicEnergyOther;
+			}
+
+			
+		}
+
+
+		int input_len = 4096; //TODO 需要根据当前的input长度计算出需要累加的次数
+		bool isK = true; //TODO 需要根据当前计算的是K还是V，有不同的计算方式
+		int num_accum_PE;
+
+		if(isK){
+			num_accum_PE = param->num_AGs*1;//每个AG做一次累加运算
+		}
+		else{
+			num_accum_PE = input_len / 64; //每64个词为一行，不同的行之间需要累加
+		}
+
+
+		if (NMpe) {
+				adderTreeNM->CalculateLatency(num_accum_PE, 2, 0); //每次2个相加 TODO这里实现是否正确
+				adderTreeNM->CalculatePower(num_accum_PE, 2);
+				*readLatency = MAX(subArrayReadLatency + adderTreeNM->readLatency, (*readLatency));
+				*readDynamicEnergy += adderTreeNM->readDynamicEnergy;
+				*coreLatencyADC = MAX(subArrayLatencyADC, (*coreLatencyADC));
+				*coreLatencyAccum = MAX(subArrayLatencyAccum + adderTreeNM->readLatency, (*coreLatencyAccum));
+				*coreLatencyOther = MAX(subArrayLatencyOther, (*coreLatencyOther));
+				*coreEnergyAccum += adderTreeNM->readDynamicEnergy;
+		} else {
+			throw runtime_error("Digital mode is not supported for CM subarray yet.");
+		}
+
+		//由于4个AG是并行的，因此需要除去
+		*readLatency = (*readLatency)/(param->num_AGs);
+		*coreLatencyADC = (*coreLatencyADC)/(param->num_AGs);
+		*coreLatencyAccum = (*coreLatencyAccum)/(param->num_AGs);
+		*coreLatencyOther = (*coreLatencyOther)/(param->num_AGs);
+	}
+	else if (arrayDupRow*arrayDupCol > 1) {
 		// weight matrix is duplicated among subArray
 		if (arrayDupRow < numSubArrayRow || arrayDupCol < numSubArrayCol) {
 			// a couple of subArrays are mapped by the matrix

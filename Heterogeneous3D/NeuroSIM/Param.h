@@ -86,6 +86,10 @@ public:
 
 	int numRowArrayForPE;
 	int numColArrayForPE;
+
+	int num_channels, num_tiles, num_PEs,num_AGs,num_subarrays;
+
+	double v_on, v_off, v_nor;
 };
 
 #endif

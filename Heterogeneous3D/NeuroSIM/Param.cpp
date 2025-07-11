@@ -61,6 +61,15 @@ Param::Param() {
 	digital = 1;				// 0: analog computing
 								// 1: digital computing
 
+	num_channels = 16;
+	num_tiles = 8;
+	num_PEs = 8;
+	num_AGs = 4;
+	num_subarrays = 64;
+
+	v_on = 1.5; //参考magic设置
+	v_off = 0.3;
+	v_nor = 1.0;
 	
 
 	operationmode = 2;     		// 1: conventionalSequential (Use several multi-bit RRAM as one synapse)
@@ -285,4 +294,6 @@ Param::Param() {
 	}
 	/***************************************** Initialization of parameters NO need to modify *****************************************/
 }
+
+
 

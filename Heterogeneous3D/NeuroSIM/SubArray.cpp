@@ -807,6 +807,7 @@ void SubArray::CalculateLatency(double columnRes, const vector<double> &columnRe
 				}			
 			}
 	    } else if (cell.memCellType == Type::RRAM || cell.memCellType == Type::FeFET) {
+			
 			if (conventionalSequential) {
 				double capBL = lengthCol * 0.2e-15/1e-6;
 				double colRamp = 0;
@@ -1199,6 +1200,7 @@ void SubArray::CalculatePower(const vector<double> &columnResistance) {
 				
 			}		
 	    } else if (cell.memCellType == Type::RRAM || cell.memCellType == Type::FeFET) {
+
 			if (conventionalSequential) {
 				double numReadCells = (int)ceil((double)numCol/numColMuxed);    // similar parameter as numReadCellPerOperationNeuro, which is for SRAM
 				double numWriteCells = (int)ceil((double)numCol/*numWriteColMuxed*/); 
@@ -1620,5 +1622,28 @@ void SubArray::PrintProperty() {
 	FunctionUnit::PrintProperty("SubArray");
 	cout << "Used Area = " << usedArea*1e12 << "um^2" << endl;
 	cout << "Empty Area = " << emptyArea*1e12 << "um^2" << endl;
+}
+
+void SubArray::GetArrayEstimation(const int weightMatrixRow, const int weightMatrixCol){
+	writeDynamicEnergyArray = 0;
+
+	int addNorPerOp = 12 * param->synapseBit;
+	int mulNorPerOp = 6.5*param->synapseBit*param->synapseBit-7.5*param->synapseBit-2;
+
+	addNor = ceil(weightMatrixCol/param->synapseBit)*addNorPerOp; //numColSubArray和numRowSubArray表征当前subArray中逻辑上的存储矩阵大小
+	mulNor = ceil(weightMatrixCol/param->synapseBit)*mulNorPerOp; //这里weightMatrixCol本身是包含了bit的，因此需要计算出实际的矩阵列数
+
+	int totalWritePulse = (addNor)+(mulNor); //总共进行的nor操作次数，计算能耗时，出于简单考虑只计算该部分。
+	// calculate WL BL and SL energy
+
+	//NOR
+	// *writeDynamicEnergyArray += subArray->capRow1 * cell.writeVoltage / 2 * cell.writeVoltage / 2 * param->numRowSubArrayReal;																																																	  // Selected WL
+	writeDynamicEnergyArray += 0; //unselected WL 为0 其他没有选择的行是否需要charge，理论上需要，不然的话会有电压差，在给定的位置进行写入
+	// *writeDynamicEnergyArray += subArray->capCol * cell.writeVoltage / 2 * cell.writeVoltage / 2 * param->numColSubArrayReal;															  // Unselected BLs
+	writeDynamicEnergyArray += capCol * param->v_nor * param->v_nor * 2*totalWritePulse; 					//selected BLs 
+	writeDynamicEnergyArray += param->v_nor * param->v_nor / (abs(1 / param->maxConductance + 1 / param->minConductance) / 2) * cell.writePulseWidth * weightMatrixRow/2 *totalWritePulse; //电阻改变消耗的能量 假设一次nor有一半的电阻转变
+	
+	// cout<<(2*weightMatrixCol/param->synapseBit)/(*writeDynamicEnergyArray)*1e-12<<endl;
+	//已选择的行上未选择的电阻没有消耗能量，因为两端电压相同
 }
 

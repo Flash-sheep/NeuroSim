@@ -84,6 +84,12 @@ public:
 	void CalculateLatency(double _rampInput, const vector<double> &columnResistance, bool CalculateclkFreq);
 	void CalculatePower(const vector<double> &columnResistance);
 
+	void GetArrayEstimation(const int weightMatrixRow, const int weightMatrixCol); //根据当前的权重矩阵情况计算出进行一次乘加操作所需要的能耗
+
+	int addNor;
+	int mulNor;
+	double writeDynamicEnergyArray;
+
 	/* Properties */	
 	bool initialized;	   // Initialization flag
 	int numRow;			   // Number of rows
