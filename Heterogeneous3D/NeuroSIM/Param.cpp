@@ -61,15 +61,21 @@ Param::Param() {
 	digital = 1;				// 0: analog computing
 								// 1: digital computing
 
+	//组织结构参数设置
 	num_channels = 16;
 	num_tiles = 8;
 	num_PEs = 8;
 	num_AGs = 4;
 	num_subarrays = 64;
 
+	//硬件参数设置
 	v_on = 1.5; //参考magic设置
 	v_off = 0.3;
 	v_nor = 1.0;
+
+	//模型参数设置
+	n_heads = 32;
+	d_head = 128;
 	
 
 	operationmode = 2;     		// 1: conventionalSequential (Use several multi-bit RRAM as one synapse)
@@ -102,7 +108,7 @@ Param::Param() {
 	peBufferType = false;        // false: register file
 								// true: SRAM
 	
-	chipActivation = true;      // false: activation (reLu/sigmoid) inside Tile
+	chipActivation = false;      // false: activation (reLu/sigmoid) inside Tile
 								// true: activation outside Tile
 						 		
 	reLu = true;                // false: sigmoid

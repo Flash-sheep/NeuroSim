@@ -427,11 +427,37 @@ int main(int argc, char * argv[]) {
 			//5、PE层面需要记录当前存储了KV缓存的array group并调用对应的subarray进行计算
 			//6、记录方式需要精确到指定的Subarray还是只需要记录数量即可？
 			//7、在Array group层面，是按照array group的维度进行并行的，
-			ChipCalculatePerformance(inputParameter, tech, cell, 0, NULL, NULL, NULL, 0,
+			
+			//当前分配16个channel，每个channel分配2个head
+			int channel_allocated = 16;
+
+			for(int i = 0; i<channel_allocated;i++){
+				
+				ChipCalculatePerformance(inputParameter, tech, cell, 0, NULL, NULL, NULL, 0,
 							netStructure, markNM, numTileEachLayer, utilizationEachLayer, speedUpEachLayer, tileLocaEachLayer, tierLocationEachLayer,
 							numPENM, desiredPESizeNM, desiredTileSizeCM, desiredPESizeCM, CMTileheight, CMTilewidth, NMTileheight, NMTilewidth,
 							&layerReadLatency, &layerReadDynamicEnergy, &tileLeakage, &layerbufferLatency, &layerbufferDynamicEnergy, &layericLatency, &layericDynamicEnergy,
 							&coreLatencyADC, &coreLatencyAccum, &coreLatencyOther, &coreEnergyADC, &coreEnergyAccum, &coreEnergyOther, false, &layerclkPeriod);
+				
+				chipReadLatency = MAX(layerReadLatency,chipReadLatency);
+				chipReadDynamicEnergy += layerReadDynamicEnergy;
+
+				chipbufferLatency = MAX(layerbufferLatency,chipbufferLatency);
+				chipbufferReadDynamicEnergy += layerbufferDynamicEnergy;
+
+				chipicLatency = MAX(layericLatency,chipicLatency);
+				chipicReadDynamicEnergy += layericDynamicEnergy;
+				
+				chipLatencyADC = MAX(coreLatencyADC,chipLatencyADC);
+				chipLatencyAccum = MAX(coreLatencyAccum,chipLatencyAccum);
+				chipLatencyOther = MAX(coreLatencyOther,chipLatencyOther);
+				
+				chipEnergyADC += coreEnergyADC;
+				chipEnergyAccum += coreEnergyAccum;
+				chipEnergyOther += coreEnergyOther;
+				
+			}
+			
 		}
 		else if (! param->pipeline) {
 			// layer-by-layer process

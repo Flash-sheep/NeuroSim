@@ -681,27 +681,84 @@ double ChipCalculatePerformance(InputParameter& inputParameter, Technology& tech
 	int totalNumTile = 0;
 
 	if(!param->digital)
-	for (int i=0; i<netStructure.size(); i++) {
-		totalNumTile += numTileEachLayer[0][i] * numTileEachLayer[1][i];
-	}
+		for (int i=0; i<netStructure.size(); i++) {
+			totalNumTile += numTileEachLayer[0][i] * numTileEachLayer[1][i];
+		}
 	if(param->digital){
 		//KV缓存模拟 Chip级别的模拟，需要依次调用每个tile，计算其当前轮次需要的运行能效
+		//Chip层代表的是channel层，每个channel中放置两个head
 		double tileReadLatency = 0;
-				double tileReadDynamicEnergy = 0;
-				double tilebufferLatency = 0;
-				double tilebufferDynamicEnergy = 0;
-				double tileicLatency = 0;
-				double tileicDynamicEnergy = 0;
-				double tileLatencyADC = 0;
-				double tileLatencyAccum = 0;
-				double tileLatencyOther = 0;
-				double tileEnergyADC = 0;
-				double tileEnergyAccum = 0;
-				double tileEnergyOther = 0;
-		TileCalculatePerformance(newMemory, newMemory, inputVector, 1, 0, 0, 1, 1,
+		double tileReadDynamicEnergy = 0;
+		double tilebufferLatency = 0;
+		double tilebufferDynamicEnergy = 0;
+		double tileicLatency = 0;
+		double tileicDynamicEnergy = 0;
+		double tileLatencyADC = 0;
+		double tileLatencyAccum = 0;
+		double tileLatencyOther = 0;
+		double tileEnergyADC = 0;
+		double tileEnergyAccum = 0;
+		double tileEnergyOther = 0;
+
+		int tile_allocated = 2;
+
+		for(int i =0;i<tile_allocated;i++){
+			//Tile之间是完全并行的
+
+			TileCalculatePerformance(newMemory, newMemory, inputVector, 1, 0, 0, 1, 1,
 									1, 1, numInVector*param->numBitInput, cell, &tileReadLatency, &tileReadDynamicEnergy, &tileLeakage,
 									&tilebufferLatency, &tilebufferDynamicEnergy, &tileicLatency, &tileicDynamicEnergy, 
 									&tileLatencyADC, &tileLatencyAccum, &tileLatencyOther, &tileEnergyADC, &tileEnergyAccum, &tileEnergyOther, CalculateclkFreq, clkPeriod);
+			
+			*readLatency = MAX(tileReadLatency, (*readLatency));
+			*readDynamicEnergy += tileReadDynamicEnergy;
+			*bufferLatency = MAX(tilebufferLatency, (*bufferLatency));
+			*bufferDynamicEnergy += tilebufferDynamicEnergy;
+			*icLatency = MAX(tileicLatency, (*icLatency));
+			*icDynamicEnergy += tileicDynamicEnergy;
+			
+			*coreLatencyADC = MAX(tileLatencyADC, (*coreLatencyADC));
+			*coreLatencyAccum = MAX(tileLatencyAccum, (*coreLatencyAccum));
+			*coreLatencyOther = MAX(tileLatencyOther, (*coreLatencyOther));
+			
+			*coreEnergyADC += tileEnergyADC;
+			*coreEnergyAccum += tileEnergyAccum;
+			*coreEnergyOther += tileEnergyOther;
+			
+
+		}
+
+		int input_len = 4096;
+		int num_head = 2; //每个channel内部有2个head
+
+		double numBitToLoadOut,numBitToLoadIn;
+
+		numBitToLoadOut= numBitToLoadIn = input_len*param->d_head*param->numBitInput*num_head;
+		
+		if (param->H3D) {
+			GhTree->CalculateLatency(0, 0, 0, 1, NMTileheight/param->numMemTier, NMTilewidth/param->numMemTier, ceil((numBitToLoadOut+numBitToLoadIn)/GhTree->busWidth));
+			GhTree->CalculatePower(0, 0, 0, 1, NMTileheight/param->numMemTier, NMTilewidth/param->numMemTier, GhTree->busWidth, 
+							ceil((numBitToLoadOut+numBitToLoadIn)/GhTree->busWidth));
+		} else {
+			GhTree->CalculateLatency(0, 0, tileLocaEachLayer[0][l], tileLocaEachLayer[1][l], NMTileheight, NMTilewidth, ceil((numBitToLoadOut+numBitToLoadIn)/GhTree->busWidth));
+			GhTree->CalculatePower(0, 0, tileLocaEachLayer[0][l], tileLocaEachLayer[1][l], NMTileheight, NMTilewidth, GhTree->busWidth, 
+							ceil((numBitToLoadOut+numBitToLoadIn)/GhTree->busWidth));
+		}
+
+		globalBuffer->CalculateLatency(globalBuffer->interface_width, numBitToLoadOut/globalBuffer->interface_width,
+								globalBuffer->interface_width, numBitToLoadIn/globalBuffer->interface_width);
+		globalBuffer->CalculatePower(globalBuffer->interface_width, numBitToLoadOut/globalBuffer->interface_width,
+								globalBuffer->interface_width, numBitToLoadIn/globalBuffer->interface_width);
+		// since multi-core buffer has improve the parallelism
+		globalBuffer->readLatency /= MIN(numBufferCore, ceil(globalBusWidth/globalBuffer->interface_width));
+		globalBuffer->writeLatency /= MIN(numBufferCore, ceil(globalBusWidth/globalBuffer->interface_width));
+		// each time, only a part of the ic is used to transfer data to a part of the tiles
+
+		if (param->H3D) {
+			tsvPath->CalculateLatency(tile_allocated, (numBitToLoadIn+numBitToLoadOut));
+			tsvPath->CalculatePower(tile_allocated,numBitToLoadIn+numBitToLoadOut);
+		}
+		
 	}
 	else if (markNM[l] == 0) {   // conventional mapping
 		for (int i=0; i<ceil((double) netStructure[l][2]*(double) netStructure[l][3]*(double) netStructure[l][4]*(double) numRowPerSynapse/desiredTileSizeCM); i++) {       // # of tiles in row
@@ -910,6 +967,7 @@ double ChipCalculatePerformance(InputParameter& inputParameter, Technology& tech
 				*coreLatencyOther += maxPool->readLatency;
 				*coreEnergyOther += maxPool->readDynamicEnergy;
 			}
+			
 			double numBitToLoadOut = weightMatrixRow*param->numBitInput*numInVector/netStructure[l][3];
 			double numBitToLoadIn = ceil(weightMatrixCol/param->numColPerSynapse)*param->numBitInput*numInVector/(netStructure[l][6]? 4:1);
 			

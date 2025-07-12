@@ -350,7 +350,7 @@ double ProcessingUnitCalculatePerformance(SubArray *subArray, const vector<vecto
 			columnResistance = GetColumnResistance(fake_input_vector, fake_subarray_memory, cell, param->parallelRead, subArray->resCellAccess);
 
 
-			subArray->GetArrayEstimation(rowActivated,param->numColSubArray); //初始化计算片上的能耗
+			subArray->GetArrayEstimation(rowActivated,param->numRowSubArray); //初始化计算片上的能耗 逻辑列数为1024与行数相同
 			subArray->CalculateLatency(1e20, columnResistance, CalculateclkFreq);
 			if(CalculateclkFreq && (*clkPeriod < subArray->readLatency)){
 				*clkPeriod = subArray->readLatency;					//clk freq is decided by the longest sensing latency

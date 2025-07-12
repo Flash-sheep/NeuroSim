@@ -525,8 +525,8 @@ void SubArray::CalculateArea() {  //calculate layout area for total design
 				
 				height = ((cell.writeVoltage > 1.5)==true? (sllevelshifter.height):0) + slSwitchMatrix.height + heightArray + ((numColMuxed > 1)==true? (mux.height):0) + multilevelSenseAmp.height + multilevelSAEncoder.height + shiftAddWeight.height + shiftAddInput.height + sarADC.height;
 				width = MAX( ((cell.writeVoltage > 1.5)==true? (wllevelshifter.width + bllevelshifter.width):0) + wlNewSwitchMatrix.width + wlSwitchMatrix.width, ((numColMuxed > 1)==true? (muxDecoder.width):0)) + widthArray;
-				usedArea = areaArray + ((cell.writeVoltage > 1.5)==true? (wllevelshifter.area + bllevelshifter.area + sllevelshifter.area):0) + wlSwitchMatrix.area + wlNewSwitchMatrix.area + slSwitchMatrix.area + 
-							((numColMuxed > 1)==true? (mux.area + muxDecoder.area):0) + multilevelSenseAmp.area  + multilevelSAEncoder.area + shiftAddWeight.area + shiftAddInput.area + sarADC.area;
+				usedArea = areaArray + ((cell.writeVoltage > 1.5)==true? (wllevelshifter.area + bllevelshifter.area + sllevelshifter.area):0) + wlSwitchMatrix.area / 2. + wlNewSwitchMatrix.area + slSwitchMatrix.area / 2. + 
+							((numColMuxed > 1)==true? (mux.area + muxDecoder.area):0) + multilevelSenseAmp.area  + multilevelSAEncoder.area + shiftAddWeight.area + shiftAddInput.area + sarADC.area; //TODO 这里考虑到并联的方式，外部电路面积减半
 				
 				areaADC = multilevelSenseAmp.area + multilevelSAEncoder.area + sarADC.area;
 				areaAccum = shiftAddWeight.area + shiftAddInput.area;
@@ -807,8 +807,45 @@ void SubArray::CalculateLatency(double columnRes, const vector<double> &columnRe
 				}			
 			}
 	    } else if (cell.memCellType == Type::RRAM || cell.memCellType == Type::FeFET) {
+			if(param->digital){
+				double capBL = lengthCol * 0.2e-15/1e-6;
+				int numWriteOperationPerRow = (int)ceil((double)numCol*activityColWrite/numWriteCellPerOperationNeuro);
+				double colRamp = 0;
+				double tau = (capCol)*(cell.resMemCellAvg/(numRow/2));
+				colDelay = horowitz(tau, 0, 1e20, &colRamp);
+				colDelay = tau * 0.2;  // assume the 15~20% voltage drop is enough for sensing
+				if (CalculateclkFreq || !param->synchronous) {		
+
+
+					wlSwitchMatrix.CalculateLatency(1e20, capRow1, resRow, 2+0+numRow*numColMuxed, 0);
+					slSwitchMatrix.CalculateLatency(1e20, capCol, resCol, 0, 2+mulNor+addNor+0); //sl需要进行输入写入，nor运算，以及最后的逐行读取操作。这里都忽略了Set操作的开销
+
+					if (numColMuxed>1) {
+						mux.CalculateLatency(colRamp, 0, numColMuxed*numRow);
+						muxDecoder.CalculateLatency(1e20, mux.capTgGateN*ceil(numCol/numColMuxed), mux.capTgGateP*ceil(numCol/numColMuxed), numColMuxed*numRow, 0);
+					}
+
+					multilevelSenseAmp.CalculateLatency(columnResistance, numColMuxed, numRow);
+					multilevelSAEncoder.CalculateLatency(1e20, numColMuxed*numRow);
 			
-			if (conventionalSequential) {
+				}
+
+				readLatencyADC = (multilevelSenseAmp.readLatency + multilevelSAEncoder.readLatency + sarADC.readLatency + colDelay) * numColMuxed * (validated==true? param->beta : 1);
+				readLatencyOther = MAX(wlNewSwitchMatrix.readLatency + wlSwitchMatrix.readLatency, ((numColMuxed > 1)==true? (mux.readLatency+muxDecoder.readLatency):0)) * numColMuxed * (validated==true? param->beta : 1);
+
+				readLatencyAccum = shiftAddWeight.readLatency + shiftAddInput.readLatency;
+				readLatency = readLatencyADC + readLatencyAccum + readLatencyOther;
+
+				writeLatency = 0;
+				writeLatencyArray = 0;
+				writeLatencyArray += (mulNor+addNor) * cell.writePulseWidth; //每个nor操作之间都是串行执行的 TODO，这一部分可能带来相当高的延迟
+				writeLatency += MAX(wlNewSwitchMatrix.writeLatency + wlSwitchMatrix.writeLatency, slSwitchMatrix.writeLatency);
+				writeLatency += writeLatencyArray;
+
+				readLatency += writeLatencyArray;
+
+			}
+			else if (conventionalSequential) {
 				double capBL = lengthCol * 0.2e-15/1e-6;
 				double colRamp = 0;
 				double tau = (capCol)*(cell.resMemCellAvg);
@@ -1201,7 +1238,59 @@ void SubArray::CalculatePower(const vector<double> &columnResistance) {
 			}		
 	    } else if (cell.memCellType == Type::RRAM || cell.memCellType == Type::FeFET) {
 
-			if (conventionalSequential) {
+			if(param->digital){
+				double numReadCells = (int)ceil((double)numCol/numColMuxed);    // similar parameter as numReadCellPerOperationNeuro, which is for SRAM
+				double capBL = lengthCol * 0.2e-15/1e-6;
+			
+				wlSwitchMatrix.CalculatePower(numColMuxed*numRow, 0, 1./numRow, 0);  //仅计算read-out阶段
+				
+				slSwitchMatrix.CalculatePower(0, (mulNor+addNor), 0, 3./numCol); //仅计算nor阶段
+
+				if (numColMuxed > 1) {
+					mux.CalculatePower(numColMuxed*numRow);	// Mux still consumes energy during row-by-row read
+					muxDecoder.CalculatePower(numColMuxed*numRow, 1);
+				}
+				
+	
+				multilevelSenseAmp.CalculatePower(columnResistance, numRow); //TODO 这里的columnReisistance会影响power的计算，意味着需要考虑实际的resistance，或者直接将其代替为某一固定值
+				multilevelSAEncoder.CalculatePower(numColMuxed*numRow);
+
+				// Read
+				readDynamicEnergyArray = 0;
+				readDynamicEnergyArray += capBL * cell.readVoltage * cell.readVoltage * numReadCells; // Selected BLs activityColWrite
+				readDynamicEnergyArray += capRow2 * tech.vdd * tech.vdd * numRow *1; // Selected WL activityRowRead设置为1
+				readDynamicEnergyArray *= numColMuxed *2 ; //TODO 添加了并联矩阵的能耗
+				
+				readDynamicEnergy = 0;
+				readDynamicEnergy += wlNewSwitchMatrix.readDynamicEnergy;
+				readDynamicEnergy += wlSwitchMatrix.readDynamicEnergy;
+				readDynamicEnergy += ( ((numColMuxed > 1)==true? (mux.readDynamicEnergy + muxDecoder.readDynamicEnergy):0) );
+				readDynamicEnergy += multilevelSenseAmp.readDynamicEnergy;
+				readDynamicEnergy += multilevelSAEncoder.readDynamicEnergy;
+				// readDynamicEnergy += senseAmp.readDynamicEnergy;
+				readDynamicEnergy += shiftAddWeight.readDynamicEnergy + shiftAddInput.readDynamicEnergy;
+				readDynamicEnergy += readDynamicEnergyArray;
+				readDynamicEnergy += sarADC.readDynamicEnergy;
+
+				readDynamicEnergy += writeDynamicEnergyArray *2 ; //将矩阵的阵列写能耗计入 这一部分在processing Unit中计算 TODO 由于采用的并联的方法
+				readDynamicEnergy += slSwitchMatrix.writeDynamicEnergy;//将slSwitch矩阵的nor能耗计入
+				
+				readDynamicEnergyADC = multilevelSenseAmp.readDynamicEnergy + multilevelSAEncoder.readDynamicEnergy + sarADC.readDynamicEnergy;
+				readDynamicEnergyAccum = shiftAddWeight.readDynamicEnergy + shiftAddInput.readDynamicEnergy;
+				readDynamicEnergyOther = wlNewSwitchMatrix.readDynamicEnergy + wlSwitchMatrix.readDynamicEnergy + ( ((numColMuxed > 1)==true? (mux.readDynamicEnergy + muxDecoder.readDynamicEnergy):0) );
+					
+				
+				// Leakage
+				leakage += wlSwitchMatrix.leakage;
+				leakage += wlNewSwitchMatrix.leakage;
+				leakage += slSwitchMatrix.leakage;
+				leakage += mux.leakage;
+				leakage += muxDecoder.leakage;
+				leakage += multilevelSenseAmp.leakage;
+				leakage += multilevelSAEncoder.leakage;
+				leakage += shiftAddWeight.leakage + shiftAddInput.leakage;
+			}
+			else if (conventionalSequential) {
 				double numReadCells = (int)ceil((double)numCol/numColMuxed);    // similar parameter as numReadCellPerOperationNeuro, which is for SRAM
 				double numWriteCells = (int)ceil((double)numCol/*numWriteColMuxed*/); 
 				int numWriteOperationPerRow = (int)ceil((double)numCol*activityColWrite/numWriteCellPerOperationNeuro);

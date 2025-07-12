@@ -403,7 +403,119 @@ void TileCalculatePerformance(const vector<vector<double> > &newMemory, const ve
 	*coreLatencyAccum = 0;
 	*coreLatencyOther = 0;
 	
-	if (!novelMap) {   // conventional Mapping
+	if(param->digital){
+		// 目前一个Tile的大小设置为了256MB，能够放置8个head按照空闲分配策略下，一个Tile只会放置一个head，每个channel放置2个head
+		int num_tile_allocated = 1;
+		int num_pe_allocated = 1; //一个PE目前刚好能放下一个head
+		int conflict_time = 1; //当一个PE内存储了多个head时，可能会出现冲突 TODO这一段延时可以由PE自行感知，在Tile层面不会有冲突
+
+		vector<vector<double>> fake_memory;
+		vector<vector<double>> fake_input;
+		
+		for(int i =0;i<num_pe_allocated;i++){
+			//依次获取延时并取最大，依次获取能耗并叠加
+			ProcessingUnitCalculatePerformance(subArrayInPE, fake_memory, fake_memory, fake_input, ceil((double)speedUpRow/(double)numPE), ceil((double)speedUpCol/(double)numPE), 
+											numSubArrayRow, numSubArrayCol, weightMatrixRow, weightMatrixCol, numInVector, cell, false,
+											&PEreadLatency, &PEreadDynamicEnergy, &PEleakage,
+											&PEbufferLatency, &PEbufferDynamicEnergy, &PEicLatency, &PEicDynamicEnergy,
+											&peLatencyADC, &peLatencyAccum, &peLatencyOther, &peEnergyADC, &peEnergyAccum, &peEnergyOther, CalculateclkFreq, clkPeriod);
+			*readLatency = MAX(PEreadLatency, (*readLatency))*2; //TODO考虑到需要依次计算KV在Tile层将pe的延迟翻倍
+			*readDynamicEnergy += PEreadDynamicEnergy;
+			*bufferLatency = MAX(PEbufferLatency, (*bufferLatency))*2;
+			*bufferDynamicEnergy += PEbufferDynamicEnergy;
+			*icLatency = MAX(PEicLatency,(*icLatency))*2;
+			*icDynamicEnergy += PEicDynamicEnergy;
+			
+			*coreLatencyADC = MAX(peLatencyADC, (*coreLatencyADC))*2;
+			*coreLatencyAccum = MAX(peLatencyAccum, (*coreLatencyAccum))*2;
+			*coreLatencyOther = MAX(peLatencyOther, (*coreLatencyOther))*2;
+			
+			*coreEnergyADC += peEnergyADC;
+			*coreEnergyAccum += peEnergyAccum;
+			*coreEnergyOther += peEnergyOther;
+		}
+		
+		// int accum_tile = 1; //TODO Tile层面一般情况下不需要accum，因为是按照decoder进行拆分的
+		// int accum_bit = 1;
+
+
+		if(!CalculateclkFreq){
+			
+			//TODO 暂时不考虑TIle层面的累加
+			// accumulationNM->CalculateLatency((int)(numInVector/param->numBitInput)*ceil(param->numColMuxed/param->numColPerSynapse), numPE, 0);
+			// accumulationNM->CalculatePower((int)(numInVector/param->numBitInput)*ceil(param->numColMuxed/param->numColPerSynapse), numPE);
+			// *readLatency += accumulationNM->readLatency;
+			// *readDynamicEnergy += accumulationNM->readDynamicEnergy;
+			
+			// *coreLatencyAccum += accumulationNM->readLatency;
+			// *coreEnergyAccum += accumulationNM->readDynamicEnergy;
+			
+			//considering buffer activation: no matter speedup or not, the total number of data transferred is fixed
+			double numBitToLoadOut, numBitToLoadIn;
+
+			//TODO Tile内部的输入输出设置，每有一个head就有一个对应长度为L×d_head的大小输入，输出为d_head×L
+			int input_len = 4096;
+			int num_head = 1;
+
+			numBitToLoadOut= numBitToLoadIn = input_len*param->d_head*param->numBitInput*num_head;
+			inputBufferNM->CalculateLatency(inputBufferNM->interface_width, numBitToLoadOut/inputBufferNM->interface_width, inputBufferNM->interface_width, numBitToLoadOut/inputBufferNM->interface_width);
+			inputBufferNM->CalculatePower(inputBufferNM->interface_width, numBitToLoadOut/inputBufferNM->interface_width, inputBufferNM->interface_width, numBitToLoadOut/inputBufferNM->interface_width);
+		
+			if (!param->chipActivation) {
+				reLuNM->CalculateLatency((int)(input_len*input_len)*ceil(param->numColMuxed/param->numColPerSynapse)/reLuNM->numUnit);
+				reLuNM->CalculatePower((int)(input_len*input_len)*ceil(param->numColMuxed/param->numColPerSynapse)/reLuNM->numUnit);
+				*readLatency += reLuNM->readLatency;
+				*readDynamicEnergy += reLuNM->readDynamicEnergy;
+				*coreLatencyOther += reLuNM->readLatency;
+				*coreEnergyOther += reLuNM->readDynamicEnergy;
+				
+				outputBufferNM->CalculateLatency(outputBufferNM->interface_width, numBitToLoadIn/outputBufferNM->interface_width, outputBufferNM->interface_width, numBitToLoadIn/outputBufferNM->interface_width);
+				outputBufferNM->CalculatePower(outputBufferNM->interface_width, numBitToLoadIn/outputBufferNM->interface_width, outputBufferNM->interface_width, numBitToLoadIn/outputBufferNM->interface_width);
+
+			} else {
+				outputBufferNM->CalculateLatency(outputBufferNM->interface_width, numBitToLoadIn/outputBufferNM->interface_width, outputBufferNM->interface_width, numBitToLoadIn/outputBufferNM->interface_width);
+				outputBufferNM->CalculatePower(outputBufferNM->interface_width, numBitToLoadIn/outputBufferNM->interface_width, outputBufferNM->interface_width, numBitToLoadIn/outputBufferNM->interface_width);
+			}
+			// since multi-core buffer has improve the parallelism
+			inputBufferNM->readLatency /= MIN(numInBufferCore, ceil(hTreeNM->busWidth/inputBufferNM->interface_width));
+			inputBufferNM->writeLatency /= MIN(numInBufferCore, ceil(hTreeNM->busWidth/inputBufferNM->interface_width));
+			outputBufferNM->readLatency /= MIN(numOutBufferCore, ceil(hTreeNM->busWidth/inputBufferNM->interface_width));
+			outputBufferNM->writeLatency /= MIN(numOutBufferCore, ceil(hTreeNM->busWidth/inputBufferNM->interface_width));
+			
+			*readLatency += inputBufferNM->readLatency + inputBufferNM->writeLatency;
+			*readDynamicEnergy += inputBufferNM->readDynamicEnergy + inputBufferNM->writeDynamicEnergy;
+			*readLatency += (outputBufferNM->readLatency + outputBufferNM->writeLatency);
+			*readDynamicEnergy += outputBufferNM->readDynamicEnergy + outputBufferNM->writeDynamicEnergy;
+			
+			// used to define travel distance
+			double PEheight, PEwidth, PEbufferArea;
+			int numSubArray = ceil((double) peSize/(double) param->numRowSubArray)*ceil((double) peSize/(double) param->numColSubArray);
+			vector<double> PEarea;
+			PEarea = ProcessingUnitCalculateArea(subArrayInPE, ceil((double)sqrt((double)numSubArray)), ceil((double)sqrt((double)numSubArray)), true, &PEheight, &PEwidth, &PEbufferArea);
+			
+			if (param->H3D) {
+				hTreeNM->CalculateLatency(0, 0, 1, 1, PEheight/param->numMemTier, PEwidth/param->numMemTier, (numBitToLoadOut+numBitToLoadIn)/hTreeNM->busWidth);
+				hTreeNM->CalculatePower(0, 0, 1, 1, PEheight/param->numMemTier, PEwidth/param->numMemTier, hTreeNM->busWidth, (numBitToLoadOut+numBitToLoadIn)/hTreeNM->busWidth);
+			} else {
+				hTreeNM->CalculateLatency(0, 0, 1, 1, PEheight, PEwidth, (numBitToLoadOut+numBitToLoadIn)/hTreeNM->busWidth);
+				hTreeNM->CalculatePower(0, 0, 1, 1, PEheight, PEwidth, hTreeNM->busWidth, (numBitToLoadOut+numBitToLoadIn)/hTreeNM->busWidth);
+			}
+			
+			*readLatency += hTreeNM->readLatency;
+			*readDynamicEnergy += hTreeNM->readDynamicEnergy;
+				
+			*bufferLatency += (inputBufferNM->readLatency + outputBufferNM->readLatency + inputBufferNM->writeLatency + outputBufferNM->writeLatency);
+			*icLatency += hTreeNM->readLatency;
+			*bufferDynamicEnergy += inputBufferNM->readDynamicEnergy + outputBufferNM->readDynamicEnergy + inputBufferNM->writeDynamicEnergy + outputBufferNM->writeDynamicEnergy;
+			*icDynamicEnergy += hTreeNM->readDynamicEnergy;
+			
+			*coreLatencyOther += (inputBufferNM->readLatency + inputBufferNM->writeLatency + outputBufferNM->readLatency + outputBufferNM->writeLatency + hTreeNM->readLatency);
+			*coreEnergyOther += inputBufferNM->readDynamicEnergy + inputBufferNM->writeDynamicEnergy + outputBufferNM->readDynamicEnergy + outputBufferNM->writeDynamicEnergy + hTreeNM->readDynamicEnergy;
+			*leakage = PEleakage*numPE + accumulationNM->leakage + inputBufferNM->leakage + outputBufferNM->leakage;
+		}
+
+	}
+	else if (!novelMap) {   // conventional Mapping
 		if (speedUpRow*speedUpCol > 1) {
 			if ((speedUpRow >= numPE) && (speedUpCol >= numPE)) {
 				// duplication in PE or subArray --> tell each PE to take the whole assigned weight  --> "fully" duplication
