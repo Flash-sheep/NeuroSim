@@ -415,7 +415,7 @@ void TileCalculatePerformance(const vector<vector<double> > &newMemory, const ve
 		for(int i =0;i<num_pe_allocated;i++){
 			//依次获取延时并取最大，依次获取能耗并叠加
 			ProcessingUnitCalculatePerformance(subArrayInPE, fake_memory, fake_memory, fake_input, ceil((double)speedUpRow/(double)numPE), ceil((double)speedUpCol/(double)numPE), 
-											numSubArrayRow, numSubArrayCol, weightMatrixRow, weightMatrixCol, numInVector, cell, false,
+											numSubArrayRow, numSubArrayCol, weightMatrixRow, weightMatrixCol, numInVector, cell, true,
 											&PEreadLatency, &PEreadDynamicEnergy, &PEleakage,
 											&PEbufferLatency, &PEbufferDynamicEnergy, &PEicLatency, &PEicDynamicEnergy,
 											&peLatencyADC, &peLatencyAccum, &peLatencyOther, &peEnergyADC, &peEnergyAccum, &peEnergyOther, CalculateclkFreq, clkPeriod);

@@ -56,7 +56,7 @@ using namespace std;
 Param::Param() {
 	/***************************************** user defined design options and parameters *****************************************/
 
-	debug = 1;
+	debug = 0;
 
 	digital = 1;				// 0: analog computing
 								// 1: digital computing

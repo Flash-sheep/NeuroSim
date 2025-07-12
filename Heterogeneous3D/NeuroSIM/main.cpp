@@ -363,7 +363,7 @@ int main(int argc, char * argv[]) {
 		}
 		
 
-		return 0;
+		// return 0;
 	 
 		double clkPeriod = 0;
 		double layerclkPeriod = 0;
@@ -433,7 +433,9 @@ int main(int argc, char * argv[]) {
 
 			for(int i = 0; i<channel_allocated;i++){
 				
-				ChipCalculatePerformance(inputParameter, tech, cell, 0, NULL, NULL, NULL, 0,
+				const string fake_file = "fake";
+
+				ChipCalculatePerformance(inputParameter, tech, cell, 0, fake_file, fake_file, fake_file, 0,
 							netStructure, markNM, numTileEachLayer, utilizationEachLayer, speedUpEachLayer, tileLocaEachLayer, tierLocationEachLayer,
 							numPENM, desiredPESizeNM, desiredTileSizeCM, desiredPESizeCM, CMTileheight, CMTilewidth, NMTileheight, NMTilewidth,
 							&layerReadLatency, &layerReadDynamicEnergy, &tileLeakage, &layerbufferLatency, &layerbufferDynamicEnergy, &layericLatency, &layericDynamicEnergy,

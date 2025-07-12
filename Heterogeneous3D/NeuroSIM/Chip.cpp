@@ -418,10 +418,11 @@ void ChipInitialize(InputParameter& inputParameter, Technology& tech, Technology
 	
 	
 	// define bufferSize for inference operation
-	int bufferSize = param->numBitInput*maxLayerInput;										 
+	int bufferSize = param->numBitInput*4096;										 
 	
 	//globalBuffer->Initialize(param->numBitInput*maxLayerInput, globalBusWidth, 1, param->unitLengthWireResistance, param->clkFreq, param->globalBufferType);
 	numBufferCore = ceil(bufferSize/(param->globalBufferCoreSizeRow*param->globalBufferCoreSizeCol));
+	// cout<<"ceil(bufferSize/(param->globalBufferCoreSizeRow*param->globalBufferCoreSizeCol))"<<ceil(bufferSize/(param->globalBufferCoreSizeRow*param->globalBufferCoreSizeCol))<<endl;
 	//numBufferCore = ceil(1.5*numBufferCore);
 	globalBuffer->Initialize((param->globalBufferCoreSizeRow*param->globalBufferCoreSizeCol), param->globalBufferCoreSizeCol, 1, param->unitLengthWireResistance, param->clkFreq, param->globalBufferType);
 	

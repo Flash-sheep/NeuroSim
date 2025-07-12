@@ -88,7 +88,7 @@ public:
 
 	int addNor;
 	int mulNor;
-	double writeDynamicEnergyArray;
+	// double writeDynamicEnergyArray;
 
 	/* Properties */	
 	bool initialized;	   // Initialization flag
