@@ -530,19 +530,20 @@ void SubArray::CalculateArea() {  //calculate layout area for total design
 				
 				areaADC = multilevelSenseAmp.area + multilevelSAEncoder.area + sarADC.area;
 				areaAccum = shiftAddWeight.area + shiftAddInput.area;
-				areaOther = ((cell.writeVoltage > 1.5)==true? (wllevelshifter.area + bllevelshifter.area + sllevelshifter.area):0) + wlNewSwitchMatrix.area + wlSwitchMatrix.area + slSwitchMatrix.area + ((numColMuxed > 1)==true? (mux.area + muxDecoder.area):0);
+				areaOther = ((cell.writeVoltage > 1.5)==true? (wllevelshifter.area + bllevelshifter.area + sllevelshifter.area):0) + wlNewSwitchMatrix.area + wlSwitchMatrix.area /2. + slSwitchMatrix.area /2. + ((numColMuxed > 1)==true? (mux.area + muxDecoder.area):0);
 				
 				area = height * width;				
 				emptyArea = area - usedArea;
 
 				areaArray+=areaOther; //TODO 这里将switchmatrix算进了阵列面积，因为tsv与PE数量对应而不与subarray数量对应
-				if(param->debug){
+				if(param->debug&&!param->subarray_count){
 					cout<<"-----------------Subarray area composition------------"<<endl;
 					cout<<"areaArray: "<<areaArray*1e6<<"mm^2"<<endl;
 					cout<<"areaADC: "<<areaADC*1e6<<"mm^2"<<endl;
 					cout<<"areaAccum: "<<areaAccum*1e6<<"mm^2"<<endl;
 					cout<<"areaOther: "<<areaOther*1e6<<"mm^2"<<endl;
 					cout<<"usedArea: "<<usedArea*1e6<<"mm^2"<<endl;
+					param->subarray_count++;
 				}
 
 			} else if (BNNsequentialMode || XNORsequentialMode) {    
@@ -818,7 +819,7 @@ void SubArray::CalculateLatency(double columnRes, const vector<double> &columnRe
 
 
 					wlSwitchMatrix.CalculateLatency(1e20, capRow1, resRow, 2+0+numRow*numColMuxed, 0);
-					slSwitchMatrix.CalculateLatency(1e20, capCol, resCol, 0, 2+mulNor+addNor+0); //sl需要进行输入写入，nor运算，以及最后的逐行读取操作。这里都忽略了Set操作的开销
+					slSwitchMatrix.CalculateLatency(1e20, capCol, resCol, 2+mulNor+addNor+0, 0); //sl需要进行输入写入，nor运算，以及最后的逐行读取操作。这里都忽略了Set操作的开销
 
 					if (numColMuxed>1) {
 						mux.CalculateLatency(colRamp, 0, numColMuxed*numRow);
@@ -839,8 +840,10 @@ void SubArray::CalculateLatency(double columnRes, const vector<double> &columnRe
 				writeLatency = 0;
 				writeLatencyArray = 0;
 				writeLatencyArray += (mulNor+addNor) * cell.writePulseWidth; //每个nor操作之间都是串行执行的 TODO，这一部分可能带来相当高的延迟
-				writeLatency += MAX(wlNewSwitchMatrix.writeLatency + wlSwitchMatrix.writeLatency, slSwitchMatrix.writeLatency);
+
 				writeLatency += writeLatencyArray;
+
+
 
 				readLatency += writeLatencyArray;
 
@@ -1255,6 +1258,8 @@ void SubArray::CalculatePower(const vector<double> &columnResistance) {
 				multilevelSenseAmp.CalculatePower(columnResistance, numRow); //TODO 这里的columnReisistance会影响power的计算，意味着需要考虑实际的resistance，或者直接将其代替为某一固定值
 				multilevelSAEncoder.CalculatePower(numColMuxed*numRow);
 
+				multilevelSenseAmp.readDynamicEnergy/=40; //TODO 除以40来模拟SA
+
 				// Read
 				readDynamicEnergyArray = 0;
 				readDynamicEnergyArray += capBL * cell.readVoltage * cell.readVoltage * numReadCells; // Selected BLs activityColWrite
@@ -1280,6 +1285,33 @@ void SubArray::CalculatePower(const vector<double> &columnResistance) {
 				readDynamicEnergyOther = wlNewSwitchMatrix.readDynamicEnergy + wlSwitchMatrix.readDynamicEnergy + ( ((numColMuxed > 1)==true? (mux.readDynamicEnergy + muxDecoder.readDynamicEnergy):0) );
 					
 				
+				if(param->debug&&!param->subarray_count){
+					cout<<"------------------Subarray latency composition------------"<<endl;
+					cout<<"readLatencyADC: "<<readLatencyADC*1e9<<"ns"<<endl;
+					cout<<"readLatencyAccum: "<<readLatencyAccum*1e9<<"ns"<<endl;
+					cout<<"readLatencyOther: "<<readLatencyOther*1e9<<"ns"<<endl;
+					cout<<"readLatency: "<<readLatency*1e9<<"ns"<<endl;
+					cout<<"writeLatencyArray: "<<writeLatencyArray*1e9<<"ns"<<endl;
+
+					cout<<"------------------Subarray Energy composition------------"<<endl;
+					cout<<"readDynamicEnergyADC: "<<readDynamicEnergyADC*1e9<<"nJ"<<endl;
+					cout<<"readDynamicEnergyAccum: "<<readDynamicEnergyAccum*1e9<<"nJ"<<endl;
+					cout<<"readDynamicEnergyOther: "<<readDynamicEnergyOther*1e9<<"nJ"<<endl;
+					cout<<"readDynamicEnergy: "<<readDynamicEnergy*1e9<<"nJ"<<endl;
+					cout<<"readDynamicEnergyArray: "<<readDynamicEnergyArray*1e9<<"nJ"<<endl;
+					cout<<"writeDynamicEnergyArray: "<<writeDynamicEnergyArray*1e9<<"nJ"<<endl;
+
+
+					cout<<"------------------Subarray Power composition------------"<<endl;
+					cout<<"ADC power: "<<readDynamicEnergyADC/readLatencyADC<<"W"<<endl;
+					cout<<"Accum power: "<<readDynamicEnergyAccum/readLatencyAccum<<"W"<<endl;
+					cout<<"Other power: "<<readDynamicEnergyOther/readLatencyOther<<"W"<<endl;
+					cout<<"Total power: "<<readDynamicEnergy/readLatency<<"W"<<endl;
+
+					cout<<"Write Array power: "<<writeDynamicEnergyArray/writeLatencyArray<<"W"<<endl;
+					param->subarray_count++;
+				}
+
 				// Leakage
 				leakage += wlSwitchMatrix.leakage;
 				leakage += wlNewSwitchMatrix.leakage;

@@ -55,6 +55,8 @@
 #include "Param.h"
 #include "Tile.h"
 
+#include "AttentionSoftmax.h" //TODO 添加了手动的softmax单元 评估不一定精准
+
 using namespace std;
 
 extern Param *param;
@@ -74,6 +76,9 @@ HTree *hTreeNM;
 AdderTree *accumulationNM;
 Sigmoid *sigmoidNM;
 BitShifter *reLuNM;
+
+AttentionSoftmax *softmax;
+
 
 void TileInitialize(InputParameter& inputParameter, Technology& tech, Technology& techTop, Technology& techBottom, MemCell& cell, double _numPENM, double _peSizeNM, double _numPECM, double _peSizeCM){
 
@@ -96,6 +101,7 @@ void TileInitialize(InputParameter& inputParameter, Technology& tech, Technology
 				sigmoidCM = new Sigmoid(inputParameter, techBottom, cell);
 			}
 		}
+		
 	} else {
 		subArrayInPE = new SubArray(inputParameter, tech, cell);
 		inputBufferNM = new Buffer(inputParameter, tech, cell);
@@ -130,7 +136,10 @@ void TileInitialize(InputParameter& inputParameter, Technology& tech, Technology
 	numColPerSynapse = param->numColPerSynapse;
 	
 	/*** Initialize ProcessingUnit ***/
-	numSubArrayNM = ceil((double)peSizeNM/(double)param->numRowSubArray)*ceil((double)peSizeNM/(double)param->numColSubArray);
+	
+	if(!param->digital) numSubArrayNM = ceil((double)peSizeNM/(double)param->numRowSubArray)*ceil((double)peSizeNM/(double)param->numColSubArray);
+	else numSubArrayNM = param->num_AGs *param->num_subarrays; //TODO 这里忽略了AG层，直接设定PE的大小
+
 	numSubArrayCM = ceil((double)peSizeCM/(double)param->numRowSubArray)*ceil((double)peSizeCM/(double)param->numColSubArray);
 
 	ProcessingUnitInitialize(subArrayInPE, inputParameter, tech, techTop, techBottom, cell, ceil(sqrt(numSubArrayNM)), ceil(sqrt(numSubArrayNM)), ceil(sqrt(numSubArrayCM)), ceil(sqrt(numSubArrayCM)));
@@ -140,7 +149,10 @@ void TileInitialize(InputParameter& inputParameter, Technology& tech, Technology
 			accumulationNM->Initialize(numPENM, ceil((double)log2((double)param->levelOutput))+param->numBitInput+param->numColPerSynapse+1+ceil((double)log2((double)peSizeNM/(double)param->numRowSubArray)), 
 									ceil((double)numPENM*(double)param->numColSubArray/(double)param->numColMuxed), param->clkFreq);
 			if (!param->chipActivation) {
-				if (param->reLu) {
+				if(param->digital){
+					softmax = new AttentionSoftmax(param->technodeBottom,param->clkFreq,param->synapseBit, 2048, 4); //TODO 初始化softmax单元
+				}
+				else if (param->reLu) {
 					reLuNM->Initialize(ceil((double)peSizeNM*(double)param->numColSubArray/(double)param->numColMuxed), param->numBitInput, param->clkFreq);
 				} else {
 					sigmoidNM->Initialize(false, param->numBitInput, ceil((double)log2((double)param->levelOutput))+param->numBitInput+param->numColPerSynapse+1+ceil((double)log2((double)peSizeNM/(double)param->numRowSubArray))+ceil((double)log2((double)numPENM)), 
@@ -291,7 +303,10 @@ vector<double> TileCalculateArea(double numPE, double peSize, bool NMTile, doubl
 
 		accumulationNM->CalculateArea(NULL, ceil(sqrt((double)numPE))*PEwidth, NONE);
 		if (!param->chipActivation) {
-			if (param->reLu) {
+			if(param->digital){
+				area += softmax->GetArea();
+			}
+			else if (param->reLu) {
 				reLuNM->CalculateArea(NULL, ceil(sqrt((double)numPE))*PEwidth, NONE);
 				area += reLuNM->area;
 				areareLu += reLuNM->area;
@@ -310,16 +325,16 @@ vector<double> TileCalculateArea(double numPE, double peSize, bool NMTile, doubl
 
 		area += PEarea*numPE + accumulationNM->area + inputBufferNM->area + outputBufferNM->area + hTreeNM->area;
 		
-		if(param->debug){
+		if(param->debug&&!param->tile_count){
 			cout<<"-----------------Tile area composition------------"<<endl;
 			cout<<"Single PE area: "<<PEarea*1e6<<"mm^2"<<endl;
 			cout<<"Total PE area: "<<PEarea*numPE*1e6<<"mm^2"<<endl;
 			cout<<"accumulationNM: "<<accumulationNM->area*1e6<<"mm^2"<<endl;
-			if(reLuNM) cout<<"reLuNM: "<<reLuNM->area*1e6<<"mm^2"<<endl;
-			if(sigmoidNM) cout<<"sigmoidNM: "<<sigmoidNM->area*1e6<<"mm^2"<<endl;
+			cout<<"softmax: "<<softmax->GetArea()*1e6<<"mm^2"<<endl;
 			cout<<"inputBufferNM: "<<inputBufferNM->area*1e6<<"mm^2"<<endl;
 			cout<<"outputBufferNM: "<<outputBufferNM->area*1e6<<"mm^2"<<endl;
 			cout<<"hTreeNM: "<<hTreeNM->area*1e6<<"mm^2"<<endl;
+			param->tile_count++;
 		}
 
 		*height = sqrt(area);
@@ -329,7 +344,7 @@ vector<double> TileCalculateArea(double numPE, double peSize, bool NMTile, doubl
 		areaResults.push_back(hTreeNM->area);
 		areaResults.push_back(PEareaADC*numPE);
 		areaResults.push_back(PEareaAccum*numPE + accumulationNM->area);
-		areaResults.push_back(PEareaOther*numPE + inputBufferNM->area + outputBufferNM->area + areareLu + areasigmoid);
+		areaResults.push_back(PEareaOther*numPE + inputBufferNM->area + outputBufferNM->area + areareLu + areasigmoid + softmax->GetArea());
 		areaResults.push_back(PEareaArray*numPE);
 	} else {
 		int numSubArray = ceil((double) peSize/(double) param->numRowSubArray)*ceil((double) peSize/(double) param->numColSubArray);
@@ -419,16 +434,16 @@ void TileCalculatePerformance(const vector<vector<double> > &newMemory, const ve
 											&PEreadLatency, &PEreadDynamicEnergy, &PEleakage,
 											&PEbufferLatency, &PEbufferDynamicEnergy, &PEicLatency, &PEicDynamicEnergy,
 											&peLatencyADC, &peLatencyAccum, &peLatencyOther, &peEnergyADC, &peEnergyAccum, &peEnergyOther, CalculateclkFreq, clkPeriod);
-			*readLatency = MAX(PEreadLatency, (*readLatency))*2; //TODO考虑到需要依次计算KV在Tile层将pe的延迟翻倍
+			*readLatency = MAX(PEreadLatency*2, (*readLatency)); //TODO考虑到需要依次计算KV在Tile层将pe的延迟翻倍
 			*readDynamicEnergy += PEreadDynamicEnergy;
-			*bufferLatency = MAX(PEbufferLatency, (*bufferLatency))*2;
+			*bufferLatency = MAX(PEbufferLatency*2, (*bufferLatency));
 			*bufferDynamicEnergy += PEbufferDynamicEnergy;
-			*icLatency = MAX(PEicLatency,(*icLatency))*2;
+			*icLatency = MAX(PEicLatency*2,(*icLatency));
 			*icDynamicEnergy += PEicDynamicEnergy;
 			
-			*coreLatencyADC = MAX(peLatencyADC, (*coreLatencyADC))*2;
-			*coreLatencyAccum = MAX(peLatencyAccum, (*coreLatencyAccum))*2;
-			*coreLatencyOther = MAX(peLatencyOther, (*coreLatencyOther))*2;
+			*coreLatencyADC = MAX(peLatencyADC*2, (*coreLatencyADC));
+			*coreLatencyAccum = MAX(peLatencyAccum*2, (*coreLatencyAccum));
+			*coreLatencyOther = MAX(peLatencyOther*2, (*coreLatencyOther));
 			
 			*coreEnergyADC += peEnergyADC;
 			*coreEnergyAccum += peEnergyAccum;
@@ -454,7 +469,7 @@ void TileCalculatePerformance(const vector<vector<double> > &newMemory, const ve
 			double numBitToLoadOut, numBitToLoadIn;
 
 			//TODO Tile内部的输入输出设置，每有一个head就有一个对应长度为L×d_head的大小输入，输出为d_head×L
-			int input_len = 4096;
+			int input_len = 1;
 			int num_head = 1;
 
 			numBitToLoadOut= numBitToLoadIn = input_len*param->d_head*param->numBitInput*num_head;
@@ -462,12 +477,11 @@ void TileCalculatePerformance(const vector<vector<double> > &newMemory, const ve
 			inputBufferNM->CalculatePower(inputBufferNM->interface_width, numBitToLoadOut/inputBufferNM->interface_width, inputBufferNM->interface_width, numBitToLoadOut/inputBufferNM->interface_width);
 		
 			if (!param->chipActivation) {
-				reLuNM->CalculateLatency((int)(input_len*input_len)*ceil(param->numColMuxed/param->numColPerSynapse)/reLuNM->numUnit);
-				reLuNM->CalculatePower((int)(input_len*input_len)*ceil(param->numColMuxed/param->numColPerSynapse)/reLuNM->numUnit);
-				*readLatency += reLuNM->readLatency;
-				*readDynamicEnergy += reLuNM->readDynamicEnergy;
-				*coreLatencyOther += reLuNM->readLatency;
-				*coreEnergyOther += reLuNM->readDynamicEnergy;
+
+				*readLatency += softmax->GetLatency();
+				*readDynamicEnergy += softmax->GetEnergy();
+				*coreLatencyOther += softmax->GetLatency();
+				*coreEnergyOther += softmax->GetEnergy();
 				
 				outputBufferNM->CalculateLatency(outputBufferNM->interface_width, numBitToLoadIn/outputBufferNM->interface_width, outputBufferNM->interface_width, numBitToLoadIn/outputBufferNM->interface_width);
 				outputBufferNM->CalculatePower(outputBufferNM->interface_width, numBitToLoadIn/outputBufferNM->interface_width, outputBufferNM->interface_width, numBitToLoadIn/outputBufferNM->interface_width);
@@ -830,6 +844,34 @@ void TileCalculatePerformance(const vector<vector<double> > &newMemory, const ve
 			*coreEnergyOther += inputBufferNM->readDynamicEnergy + inputBufferNM->writeDynamicEnergy + outputBufferNM->readDynamicEnergy + outputBufferNM->writeDynamicEnergy + hTreeNM->readDynamicEnergy;
 			*leakage = PEleakage*numPE + accumulationNM->leakage + inputBufferNM->leakage + outputBufferNM->leakage;
 		}
+	}
+
+	if(param->debug&&!param->tile_count){
+		cout<<"------------------Tile Latency compostion------------------"<<endl;
+		cout<<"Read Latency: "<<*readLatency*1e9<<endl;
+		cout<<"Buffer Latency: "<<*bufferLatency*1e9<<endl;
+		cout<<"IC Latency: "<<*icLatency*1e9<<endl;
+		cout<<"Core Latency ADC: "<<*coreLatencyADC*1e9<<endl;
+		cout<<"Core Latency Accumulation: "<<*coreLatencyAccum*1e9<<endl;
+		cout<<"Core Latency Other: "<<*coreLatencyOther*1e9<<endl;
+
+		cout<<"------------------Tile Energy compostion------------------"<<endl;
+		cout<<"Read Dynamic Energy: "<<*readDynamicEnergy<<"J"<<endl;
+		cout<<"Buffer Dynamic Energy: "<<*bufferDynamicEnergy<<"J"<<endl;
+		cout<<"IC Dynamic Energy: "<<*icDynamicEnergy<<"J"<<endl;
+		cout<<"Core Energy ADC: "<<*coreEnergyADC<<"J"<<endl;
+		cout<<"Core Energy Accumulation: "<<*coreEnergyAccum<<"J"<<endl;
+		cout<<"Core Energy Other: "<<*coreEnergyOther<<"J"<<endl;
+
+		cout<<"------------------Tile Power compostion------------------"<<endl;
+		cout<<"Read Power: "<<*readDynamicEnergy/(*readLatency)<<"W"<<endl;
+		cout<<"Buffer Power: "<<*bufferDynamicEnergy/(*bufferLatency)<<"W"<<endl;
+		cout<<"IC Power: "<<*icDynamicEnergy/(*icLatency)<<"W"<<endl;
+		cout<<"Core Power ADC: "<<*coreEnergyADC/(*coreLatencyADC)<<"W"<<endl;
+		cout<<"Core Power Accumulation: "<<*coreEnergyAccum/(*coreLatencyAccum)<<"W"<<endl;
+		cout<<"Core Power Other: "<<*coreEnergyOther/(*coreLatencyOther)<<"W"<<endl;
+
+		param->tile_count++;
 	}
 }
 

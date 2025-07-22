@@ -70,6 +70,7 @@ Bus *busOutputCM;
 DFF *bufferInputCM;
 DFF *bufferOutputCM;
 
+
 void ProcessingUnitInitialize(SubArray *& subArray, InputParameter& inputParameter, Technology& tech, Technology& techTop, Technology& techBottom, MemCell& cell, int _numSubArrayRowNM, int _numSubArrayColNM, int _numSubArrayRowCM, int _numSubArrayColCM) {
 
 	/*** circuit level parameters ***/
@@ -148,6 +149,8 @@ void ProcessingUnitInitialize(SubArray *& subArray, InputParameter& inputParamet
 	cell.featureSize = param->featuresize; 
 	cell.writeVoltage = param->writeVoltage;
 
+	cell.writePulseWidth = param->writePulseWidth; // Write pulse width in sec
+
 	if (cell.memCellType == Type::SRAM) {   // SRAM
 		cell.heightInFeatureSize = param->heightInFeatureSizeSRAM;                   // Cell height in feature size
 		cell.widthInFeatureSize = param->widthInFeatureSizeSRAM;                     // Cell width in feature size
@@ -206,7 +209,8 @@ void ProcessingUnitInitialize(SubArray *& subArray, InputParameter& inputParamet
 	subArray->CalculateArea();
 	if (param->novelMapping) {
 		if (param->parallelRead) {
-			adderTreeNM->Initialize(numSubArrayRowNM, log2((double)param->levelOutput)+param->numBitInput+param->numColPerSynapse+1, ceil((double)numSubArrayColNM*(double)numCol/(double)param->numColMuxed), param->clkFreq);
+			if(param->digital) adderTreeNM->Initialize(2, param->synapseBit, 4, param->clkFreq); //TODo修改了addertree的设置
+			else adderTreeNM->Initialize(numSubArrayRowNM, log2((double)param->levelOutput)+param->numBitInput+param->numColPerSynapse+1, ceil((double)numSubArrayColNM*(double)numCol/(double)param->numColMuxed), param->clkFreq);
 		} else {
 			adderTreeNM->Initialize(numSubArrayRowNM, (log2((double)numRow)+param->cellBit-1)+param->numBitInput+param->numColPerSynapse+1, ceil((double)numSubArrayColNM*(double)numCol/(double)param->numColMuxed), param->clkFreq);
 		}
@@ -255,7 +259,7 @@ vector<double> ProcessingUnitCalculateArea(SubArray *subArray, int numSubArrayRo
 		busInputNM->CalculateArea(1, true); 
 		busOutputNM->CalculateArea(1, true);	
 
-		if(param->debug){
+		if(param->debug&&!param->PE_count){
 			cout<<"-----------------PE area composition------------"<<endl;
 			cout<<"Single subArray: "<<subArray->usedArea*1e6<<"mm^2"<<endl;
 			cout<<"Total subArray: "<<subArray->usedArea*(numSubArrayRow*numSubArrayCol)*1e6<<"mm^2"<<endl;
@@ -264,6 +268,7 @@ vector<double> ProcessingUnitCalculateArea(SubArray *subArray, int numSubArrayRo
 			cout<<"bufferOutputNM: "<<bufferOutputNM->area*1e6<<"mm^2"<<endl;
 			cout<<"busInputNM: "<<busInputNM->area*1e6<<"mm^2"<<endl;
 			cout<<"busOutputNM: "<<busOutputNM->area*1e6<<"mm^2"<<endl;
+			param->PE_count++;
 		}
 		
 
@@ -327,6 +332,8 @@ double ProcessingUnitCalculatePerformance(SubArray *subArray, const vector<vecto
 	double subArrayReadLatency, subArrayReadDynamicEnergy, subArrayLeakage, subArrayLatencyADC, subArrayLatencyAccum, subArrayLatencyOther;
 
 
+	int input_len = 4096; //TODO 需要根据当前的input长度计算出需要累加的次数
+	bool isK = true; //TODO 需要根据当前计算的是K还是V，有不同的计算方式
 	if(param->digital){
 		// 在数字存内计算模式下，每个PE管理4个AG，AG之间并行
 		// 目前先按照每个PE恰好存储一整个head，无需进行额外的管理
@@ -359,12 +366,12 @@ double ProcessingUnitCalculatePerformance(SubArray *subArray, const vector<vecto
 			if(!CalculateclkFreq){
 				subArray->CalculatePower(columnResistance);
 				*readDynamicEnergy += subArray->readDynamicEnergy; //由于并联需要翻倍
-				subArrayLeakage = subArray->leakage;
+				*leakage = subArray->leakage;
 
-				subArrayLatencyADC += subArray->readLatencyADC;			//sensing cycle
-				subArrayLatencyAccum += subArray->readLatencyAccum;		//#cycles
-				subArrayReadLatency += subArray->readLatency;		//#cycles + sensing cycle
-				subArrayLatencyOther += subArray->readLatencyOther;		
+				*coreLatencyADC = MAX(subArray->readLatencyADC,*coreLatencyADC);			//sensing cycle
+				*coreLatencyAccum = MAX(subArray->readLatencyAccum,*coreLatencyAccum);		//#cycles
+				*coreLatencyOther = MAX(subArray->readLatencyOther,*coreLatencyOther);
+				*readLatency = MAX(subArray->readLatency,*readLatency);	
 				
 				*coreEnergyADC += subArray->readDynamicEnergyADC;
 				*coreEnergyAccum += subArray->readDynamicEnergyAccum;
@@ -375,8 +382,8 @@ double ProcessingUnitCalculatePerformance(SubArray *subArray, const vector<vecto
 		}
 
 
-		int input_len = 4096; //TODO 需要根据当前的input长度计算出需要累加的次数
-		bool isK = true; //TODO 需要根据当前计算的是K还是V，有不同的计算方式
+
+
 		int num_accum_PE;
 
 		if(isK){
@@ -390,21 +397,14 @@ double ProcessingUnitCalculatePerformance(SubArray *subArray, const vector<vecto
 		if (NMpe) {
 				adderTreeNM->CalculateLatency(num_accum_PE, 2, 0); //每次2个相加 TODO这里实现是否正确
 				adderTreeNM->CalculatePower(num_accum_PE, 2);
-				*readLatency = MAX(subArrayReadLatency + adderTreeNM->readLatency, (*readLatency));
+				*readLatency += adderTreeNM->readLatency;
 				*readDynamicEnergy += adderTreeNM->readDynamicEnergy;
-				*coreLatencyADC = MAX(subArrayLatencyADC, (*coreLatencyADC));
-				*coreLatencyAccum = MAX(subArrayLatencyAccum + adderTreeNM->readLatency, (*coreLatencyAccum));
-				*coreLatencyOther = MAX(subArrayLatencyOther, (*coreLatencyOther));
+				*coreLatencyAccum += adderTreeNM->readLatency;
 				*coreEnergyAccum += adderTreeNM->readDynamicEnergy;
 		} else {
 			throw runtime_error("Digital mode is not supported for CM subarray yet.");
 		}
 
-		//由于4个AG是并行的，因此需要除去
-		*readLatency = (*readLatency)/(param->num_AGs);
-		*coreLatencyADC = (*coreLatencyADC)/(param->num_AGs);
-		*coreLatencyAccum = (*coreLatencyAccum)/(param->num_AGs);
-		*coreLatencyOther = (*coreLatencyOther)/(param->num_AGs);
 	}
 	else if (arrayDupRow*arrayDupCol > 1) {
 		// weight matrix is duplicated among subArray
@@ -624,11 +624,40 @@ double ProcessingUnitCalculatePerformance(SubArray *subArray, const vector<vecto
 		}
 		
 	}
+
+
 	if(!CalculateclkFreq){
 		//considering buffer activation: no matter speedup or not, the total number of data transferred is fixed
 		// input buffer: total num of data loaded in = weightMatrixRow*numInVector
 		// output buffer: total num of data transferred = weightMatrixRow*numInVector/param->numBitInput (total num of IFM in the PE) *adderTree->numAdderTree*adderTree->numAdderBit (bit precision of OFMs) 
-		if (NMpe) {
+		
+		if(param->digital){
+			//TODO 这里都是设置的KV缓存更新的计算延时，即为1。 这里没有考虑KV缓存更新时的输入延迟，那一部分属于内存系统的板块
+			bufferInputNM->CalculateLatency(0, input_len*1*param->numBitInput/(bufferInputNM->numDff));
+			bufferOutputNM->CalculateLatency(0, input_len*1*param->numBitInput/(bufferOutputNM->numDff));
+			bufferInputNM->CalculatePower(input_len*1*param->numBitInput/(bufferInputNM->numDff), bufferInputNM->numDff, false);
+			bufferOutputNM->CalculatePower(input_len*1*param->numBitInput/(bufferOutputNM->numDff), bufferOutputNM->numDff, false);
+			
+			busInputNM->CalculateLatency(input_len*1*param->numBitInput/(busInputNM->busWidth)); 
+			busInputNM->CalculatePower(busInputNM->busWidth, input_len*1*param->numBitInput/(busInputNM->busWidth));
+			
+			if (param->parallelRead) {
+				busOutputNM->CalculateLatency((input_len*1*log2((double)param->levelOutput))/(busOutputNM->numRow*busOutputNM->busWidth));
+				busOutputNM->CalculatePower(busOutputNM->numRow*busOutputNM->busWidth, (input_len*1*log2((double)param->levelOutput))/(busOutputNM->numRow*busOutputNM->busWidth));
+			} else {
+				busOutputNM->CalculateLatency((weightMatrixCol/param->numColPerSynapse*(log2((double)param->numRowSubArray)+param->cellBit-1)*numInVector/param->numBitInput)/(busOutputNM->numRow*busOutputNM->busWidth));
+				busOutputNM->CalculatePower(busOutputNM->numRow*busOutputNM->busWidth, (weightMatrixCol/param->numColPerSynapse*(log2((double)param->numRowSubArray)+param->cellBit-1)*numInVector/param->numBitInput)/(busOutputNM->numRow*busOutputNM->busWidth));
+			}
+
+			*bufferLatency = bufferInputNM->readLatency + bufferOutputNM->readLatency;	//considered in ic
+			if (!param->synchronous) {
+				*icLatency = busInputNM->readLatency + busOutputNM->readLatency;	
+			}				
+			*bufferDynamicEnergy += bufferInputNM->readDynamicEnergy + bufferOutputNM->readDynamicEnergy;
+			*icDynamicEnergy += busInputNM->readDynamicEnergy + busOutputNM->readDynamicEnergy;
+			*leakage = subArrayLeakage*numSubArrayRow*numSubArrayCol + adderTreeNM->leakage + bufferInputNM->leakage + bufferOutputNM->leakage;
+		}
+		else if (NMpe) {
 			bufferInputNM->CalculateLatency(0, weightMatrixRow/param->numRowPerSynapse*numInVector/(bufferInputNM->numDff));
 			bufferOutputNM->CalculateLatency(0, weightMatrixCol/param->numColPerSynapse*adderTreeNM->numAdderBit*numInVector/param->numBitInput/(bufferOutputNM->numDff));
 			bufferInputNM->CalculatePower(weightMatrixRow/param->numRowPerSynapse*numInVector/(bufferInputNM->numDff), bufferInputNM->numDff, false);
@@ -677,11 +706,44 @@ double ProcessingUnitCalculatePerformance(SubArray *subArray, const vector<vecto
 			*icDynamicEnergy += busInputCM->readDynamicEnergy + busOutputCM->readDynamicEnergy;
 			*leakage = subArrayLeakage*numSubArrayRow*numSubArrayCol + adderTreeCM->leakage + bufferInputCM->leakage + bufferOutputCM->leakage;
 		}
+
 		*readLatency += (*bufferLatency) + (*icLatency);	
 		*readDynamicEnergy += (*bufferDynamicEnergy) + (*icDynamicEnergy);
 		*coreLatencyOther += (*bufferLatency) + (*icLatency);	
 		*coreEnergyOther += (*bufferDynamicEnergy) + (*icDynamicEnergy);		
 	}
+
+
+	if(param->debug&&!param->PE_count){
+		cout<<"---------------ProceesingUnit Latency composition----------------"<<endl;
+		cout<<"Read Latency: "<<*readLatency*1e9<<"ns"<<endl;
+		cout<<"Buffer Latency: "<<*bufferLatency*1e9<<"ns"<<endl;
+		cout<<"IC Latency: "<<*icLatency*1e9<<"ns"<<endl;
+		cout<<"Core Latency ADC: "<<*coreLatencyADC*1e9<<"ns"<<endl;
+		cout<<"Core Latency Accum: "<<*coreLatencyAccum*1e9<<"ns"<<endl;
+		cout<<"Core Latency Other: "<<*coreLatencyOther*1e9<<"ns"<<endl;
+
+
+		cout<<"---------------ProceesingUnit Energy composition----------------"<<endl;
+		cout<<"Read Dynamic Energy: "<<*readDynamicEnergy*1e9<<"nJ"<<endl;
+		cout<<"Buffer Dynamic Energy: "<<*bufferDynamicEnergy*1e9<<"nJ"<<endl;
+		cout<<"IC Dynamic Energy: "<<*icDynamicEnergy*1e9<<"nJ"<<endl;
+		cout<<"Core Energy ADC: "<<*coreEnergyADC*1e9<<"nJ"<<endl;
+		cout<<"Core Energy Accum: "<<*coreEnergyAccum*1e9<<"nJ"<<endl;
+		cout<<"Core Energy Other: "<<*coreEnergyOther*1e9<<"nJ"<<endl;
+
+		cout<<"------------------ProcessingUnit Power compostion------------------"<<endl;
+		cout<<"Read Power: "<<*readDynamicEnergy/(*readLatency)<<"W"<<endl;
+		cout<<"Buffer Power: "<<*bufferDynamicEnergy/(*bufferLatency)<<"W"<<endl;
+		cout<<"IC Power: "<<*icDynamicEnergy/(*icLatency)<<"W"<<endl;
+		cout<<"Core Power ADC: "<<*coreEnergyADC/(*coreLatencyADC)<<"W"<<endl;
+		cout<<"Core Power Accumulation: "<<*coreEnergyAccum/(*coreLatencyAccum)<<"W"<<endl;
+		cout<<"Core Power Other: "<<*coreEnergyOther/(*coreLatencyOther)<<"W"<<endl;
+		param->PE_count++;
+	}
+	
+
+
 	return 0;
 }
 

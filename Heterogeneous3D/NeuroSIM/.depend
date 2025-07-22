@@ -2,6 +2,7 @@ Adder.o: Adder.cpp constant.h formula.h Technology.h typedef.h Param.h \
  Adder.h InputParameter.h MemCell.h FunctionUnit.h
 AdderTree.o: AdderTree.cpp constant.h formula.h Technology.h typedef.h \
  AdderTree.h InputParameter.h MemCell.h FunctionUnit.h Adder.h
+AttentionSoftmax.o: AttentionSoftmax.cpp AttentionSoftmax.h
 BitShifter.o: BitShifter.cpp constant.h formula.h Technology.h typedef.h \
  BitShifter.h InputParameter.h MemCell.h FunctionUnit.h DFF.h
 Buffer.o: Buffer.cpp constant.h formula.h Technology.h typedef.h Param.h \
@@ -107,7 +108,8 @@ Tile.o: Tile.cpp Sigmoid.h typedef.h InputParameter.h Technology.h \
  SubArray.h formula.h WLDecoderOutput.h DeMux.h ReadCircuit.h \
  SwitchMatrix.h ShiftAdd.h WLNewDecoderDriver.h constant.h \
  NewSwitchMatrix.h CurrentSenseAmp.h MultilevelSenseAmp.h \
- MultilevelSAEncoder.h SarADC.h LevelShifter.h Param.h Tile.h
+ MultilevelSAEncoder.h SarADC.h LevelShifter.h Param.h Tile.h \
+ AttentionSoftmax.h
 TSVPath.o: TSVPath.cpp constant.h formula.h Technology.h typedef.h \
  Param.h TSVPath.h InputParameter.h MemCell.h FunctionUnit.h
 util.o: util.cpp util.h Param.h

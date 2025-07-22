@@ -54,10 +54,22 @@
 using namespace std;
 
 Param::Param() {
+
+
+
+	/***************************************** parameters for debug *****************************************/
+	count = 0;
+
+	channel_count = 0;
+	tile_count = 0;
+	PE_count = 0;
+	AG_count = 0;
+	subarray_count = 0;
+
+	debug = 1;
+
+
 	/***************************************** user defined design options and parameters *****************************************/
-
-	debug = 0;
-
 	digital = 1;				// 0: analog computing
 								// 1: digital computing
 
@@ -212,10 +224,11 @@ Param::Param() {
 	minConductance = (double) 1/resistanceOff;
 	
 	readVoltage = 0.5;	                // On-chip read voltage for memory cell
-	readPulseWidth = 10e-9;             // read pulse width in sec
+	readPulseWidth = 1e-9;             // read pulse width in sec
 	accessVoltage = 1.1;                // Gate voltage for the transistor in 1T1R
 	resistanceAccess = resistanceOn*IR_DROP_TOLERANCE;            // resistance of access CMOS in 1T1R
 	writeVoltage = 1;					// Enable level shifer if writeVoltage > 1.5V
+	writePulseWidth = 1e-9; //TODO这里修改了读取和输入的延时
 	
 	/*** Calibration parameters ***/
 	if(validated){

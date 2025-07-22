@@ -92,6 +92,10 @@ public:
 	double v_on, v_off, v_nor;
 
 	int n_heads,d_head;
+
+	int count;
+
+	int channel_count, tile_count,PE_count, AG_count, subarray_count;
 };
 
 #endif

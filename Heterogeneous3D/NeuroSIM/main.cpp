@@ -200,6 +200,9 @@ int main(int argc, char * argv[]) {
 						
 		chipAreaResults = ChipCalculateArea(inputParameter, tech, cell, desiredNumTileNM, numPENM, desiredPESizeNM, desiredNumTileCM, desiredTileSizeCM, desiredPESizeCM, numTileRow, 
 						&chipHeight, &chipWidth, &CMTileheight, &CMTilewidth, &NMTileheight, &NMTilewidth);		
+		
+		param->subarray_count = param->AG_count = param->PE_count = param->tile_count =param->channel_count = 0;
+		
 		chipArea = chipAreaResults[0];
 		chipAreaIC = chipAreaResults[1];
 		chipAreaADC = chipAreaResults[2];
@@ -635,9 +638,9 @@ int main(int argc, char * argv[]) {
 			cout << "------------------------------ Summary --------------------------------" <<  endl;
 			cout << endl;
 			if (param->H3D) {
-				cout << (param->numMemTier+1) << "-Tier Chip Area : " << chipArea*1e12 << "um^2" << endl;
-				cout << (param->numMemTier) << "-Tier Memory Cube Area : " << chipAreaArray*1e12 << "um^2" << endl;
-				cout << "Shrinked IC Area : " << chipAreaIC*1e12 << "um^2" << endl;
+				cout << (param->numMemTier+1) << "-Tier Chip Area : " << chipArea*1e6 << "mm^2" << endl;
+				cout << (param->numMemTier) << "-Tier Memory Cube Area : " << chipAreaArray*1e6 << "mm^2" << endl;
+				cout << "Shrinked IC Area : " << chipAreaIC*1e6 << "mm^2" << endl;
 				cout << endl;
 			} else {
 				cout << "ChipArea : " << chipArea*1e12 << "um^2" << endl;
@@ -650,14 +653,17 @@ int main(int argc, char * argv[]) {
 			}
 			if (! param->pipeline) {
 				if (param->synchronous) cout << "Chip clock period is: " << clkPeriod*1e9 << "ns" <<endl;
-				cout << "Chip layer-by-layer readLatency (per image) is: " << chipReadLatency*1e9 << "ns" << endl;
+				cout << "Chip layer-by-layer readLatency (per token per decoder) is: " << chipReadLatency*1e9 << "ns" << endl;
 				cout << "Chip total readDynamicEnergy is: " << chipReadDynamicEnergy*1e12 << "pJ" << endl;
-				cout << "Chip total leakage Energy is: " << chipLeakageEnergy*1e12 << "pJ" << endl;
-				cout << "Chip total leakage Power is: " << chipLeakage*1e6 << "uW" << endl;
+				cout << "Chip Average Power is: "<<chipReadDynamicEnergy*1e12/(chipReadLatency*1e12) << "W" << endl;
+
 				cout << "Chip buffer readLatency is: " << chipbufferLatency*1e9 << "ns" << endl;
 				cout << "Chip buffer readDynamicEnergy is: " << chipbufferReadDynamicEnergy*1e12 << "pJ" << endl;
+				cout << "Chip buffer Power is: "<<chipbufferReadDynamicEnergy*1e12/(chipbufferLatency*1e12) << "W" << endl;
+
 				cout << "Chip ic readLatency is: " << chipicLatency*1e9 << "ns" << endl;
 				cout << "Chip ic readDynamicEnergy is: " << chipicReadDynamicEnergy*1e12 << "pJ" << endl;
+				cout << "Chip ic Power is: "<<chipicReadDynamicEnergy*1e12/(chipicLatency*1e12) << "W" << endl;
 			} else {
 				if (param->synchronous) cout << "Chip clock period is: " << clkPeriod*1e9 << "ns" <<endl;
 				cout << "Chip pipeline-system-clock-cycle (per image) is: " << chipReadLatency*1e9 << "ns" << endl;

@@ -545,7 +545,7 @@ vector<double> ChipCalculateArea(InputParameter& inputParameter, Technology& tec
 		*NMTileheight = NMheight;
 		*NMTilewidth = NMwidth;
 
-		if(param->debug){
+		if(param->debug&&!param->channel_count){
 			cout<<"-----------------Chip area composition------------"<<endl;
 			cout<<"Single Tile area: "<<NMTileArea*1e6<<"mm^2"<<endl;
 			cout<<"Total Tile area: "<<NMTileArea*desiredNumTileNM*1e6<<"mm^2"<<endl;
@@ -612,13 +612,14 @@ vector<double> ChipCalculateArea(InputParameter& inputParameter, Technology& tec
 		areaResults.push_back(tsvPath->area);
 	}
 	
-	if(param->debug){
+	if(param->debug&&!param->channel_count){
 			cout<<"globalBuffer: "<<globalBuffer->area*1e6<<"mm^2"<<endl;
 			cout<<"GhTree: "<<GhTree->area*1e6<<"mm^2"<<endl;
 			cout<<"maxPool: "<<maxPool->area*1e6<<"mm^2"<<endl;
 			cout<<"Gaccumulation: "<<Gaccumulation->area*1e6<<"mm^2"<<endl;
 			cout<<"GreLu: "<<GreLu->area*1e6<<"mm^2"<<endl;
 			cout<<"Gsigmoid: "<<Gsigmoid->area*1e6<<"mm^2"<<endl;
+			param->channel_count++;
 	}
 
 	*height = sqrt(area);
@@ -729,10 +730,10 @@ double ChipCalculatePerformance(InputParameter& inputParameter, Technology& tech
 
 		}
 
-		int input_len = 4096;
+		int input_len = 1;
 		int num_head = 2; //每个channel内部有2个head
 
-		double numBitToLoadOut,numBitToLoadIn;
+		double numBitToLoadOut,numBitToLoadIn;	//TODO CHannel层的IC延迟异常高
 
 		numBitToLoadOut= numBitToLoadIn = input_len*param->d_head*param->numBitInput*num_head;
 		
@@ -1020,6 +1021,34 @@ double ChipCalculatePerformance(InputParameter& inputParameter, Technology& tech
 		}
 
 		*leakage = tileLeakage;
+	}
+
+	if(param->debug&&!param->channel_count){
+		cout<<"------------------Channel Latency compostion------------------"<<endl;
+		cout<<"Read Latency: "<<*readLatency*1e9<<endl;
+		cout<<"Buffer Latency: "<<*bufferLatency*1e9<<endl;
+		cout<<"IC Latency: "<<*icLatency*1e9<<endl;
+		cout<<"Core Latency ADC: "<<*coreLatencyADC*1e9<<endl;
+		cout<<"Core Latency Accumulation: "<<*coreLatencyAccum*1e9<<endl;
+		cout<<"Core Latency Other: "<<*coreLatencyOther*1e9<<endl;
+
+		cout<<"------------------Channel Energy compostion------------------"<<endl;
+		cout<<"Read Dynamic Energy: "<<*readDynamicEnergy<<"J"<<endl;
+		cout<<"Buffer Dynamic Energy: "<<*bufferDynamicEnergy<<"J"<<endl;
+		cout<<"IC Dynamic Energy: "<<*icDynamicEnergy<<"J"<<endl;
+		cout<<"Core Energy ADC: "<<*coreEnergyADC<<"J"<<endl;
+		cout<<"Core Energy Accumulation: "<<*coreEnergyAccum<<"J"<<endl;
+		cout<<"Core Energy Other: "<<*coreEnergyOther<<"J"<<endl;
+
+		cout<<"------------------Channel Power compostion------------------"<<endl;
+		cout<<"Read Power: "<<*readDynamicEnergy/(*readLatency)<<"W"<<endl;
+		cout<<"Buffer Power: "<<*bufferDynamicEnergy/(*bufferLatency)<<"W"<<endl;
+		cout<<"IC Power: "<<*icDynamicEnergy/(*icLatency)<<"W"<<endl;
+		cout<<"Core Power ADC: "<<*coreEnergyADC/(*coreLatencyADC)<<"W"<<endl;
+		cout<<"Core Power Accumulation: "<<*coreEnergyAccum/(*coreLatencyAccum)<<"W"<<endl;
+		cout<<"Core Power Other: "<<*coreEnergyOther/(*coreLatencyOther)<<"W"<<endl;
+
+		param->channel_count++;
 	}
 	return 0;
 }
