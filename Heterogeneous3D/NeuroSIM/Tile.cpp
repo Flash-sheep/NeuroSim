@@ -421,7 +421,7 @@ void TileCalculatePerformance(const vector<vector<double> > &newMemory, const ve
 	if(param->digital){
 		// 目前一个Tile的大小设置为了256MB，能够放置8个head按照空闲分配策略下，一个Tile只会放置一个head，每个channel放置2个head
 		int num_tile_allocated = 1;
-		int num_pe_allocated = 1; //一个PE目前刚好能放下一个head
+		int num_pe_allocated = MAX(ceil(param->num_PEs*param->scale),param->num_PEs); //按照最大分配数来计算
 		int conflict_time = 1; //当一个PE内存储了多个head时，可能会出现冲突 TODO这一段延时可以由PE自行感知，在Tile层面不会有冲突
 
 		vector<vector<double>> fake_memory;
@@ -447,7 +447,8 @@ void TileCalculatePerformance(const vector<vector<double> > &newMemory, const ve
 			
 			*coreEnergyADC += peEnergyADC;
 			*coreEnergyAccum += peEnergyAccum;
-			*coreEnergyOther += peEnergyOther;
+			*
+			coreEnergyOther += peEnergyOther;
 		}
 		
 		// int accum_tile = 1; //TODO Tile层面一般情况下不需要accum，因为是按照decoder进行拆分的
@@ -470,7 +471,7 @@ void TileCalculatePerformance(const vector<vector<double> > &newMemory, const ve
 
 			//TODO Tile内部的输入输出设置，每有一个head就有一个对应长度为L×d_head的大小输入，输出为d_head×L
 			int input_len = 1;
-			int num_head = 1;
+			int num_head = ceil(param->num_PEs/param->pe_per_head);
 
 			numBitToLoadOut= numBitToLoadIn = input_len*param->d_head*param->numBitInput*num_head;
 			inputBufferNM->CalculateLatency(inputBufferNM->interface_width, numBitToLoadOut/inputBufferNM->interface_width, inputBufferNM->interface_width, numBitToLoadOut/inputBufferNM->interface_width);

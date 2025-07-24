@@ -332,7 +332,7 @@ double ProcessingUnitCalculatePerformance(SubArray *subArray, const vector<vecto
 	double subArrayReadLatency, subArrayReadDynamicEnergy, subArrayLeakage, subArrayLatencyADC, subArrayLatencyAccum, subArrayLatencyOther;
 
 
-	int input_len = 4096; //TODO 需要根据当前的input长度计算出需要累加的次数
+	int seq_len = param->seq_len; //TODO 需要根据当前的input长度计算出需要累加的次数
 	bool isK = true; //TODO 需要根据当前计算的是K还是V，有不同的计算方式
 	if(param->digital){
 		// 在数字存内计算模式下，每个PE管理4个AG，AG之间并行
@@ -390,7 +390,7 @@ double ProcessingUnitCalculatePerformance(SubArray *subArray, const vector<vecto
 			num_accum_PE = param->num_AGs*1;//每个AG做一次累加运算
 		}
 		else{
-			num_accum_PE = input_len / 64; //每64个词为一行，不同的行之间需要累加
+			num_accum_PE = seq_len / 64; //每64个词为一行，不同的行之间需要累加
 		}
 
 
@@ -633,17 +633,17 @@ double ProcessingUnitCalculatePerformance(SubArray *subArray, const vector<vecto
 		
 		if(param->digital){
 			//TODO 这里都是设置的KV缓存更新的计算延时，即为1。 这里没有考虑KV缓存更新时的输入延迟，那一部分属于内存系统的板块
-			bufferInputNM->CalculateLatency(0, input_len*1*param->numBitInput/(bufferInputNM->numDff));
-			bufferOutputNM->CalculateLatency(0, input_len*1*param->numBitInput/(bufferOutputNM->numDff));
-			bufferInputNM->CalculatePower(input_len*1*param->numBitInput/(bufferInputNM->numDff), bufferInputNM->numDff, false);
-			bufferOutputNM->CalculatePower(input_len*1*param->numBitInput/(bufferOutputNM->numDff), bufferOutputNM->numDff, false);
+			bufferInputNM->CalculateLatency(0, seq_len*1*param->numBitInput/(bufferInputNM->numDff));
+			bufferOutputNM->CalculateLatency(0, seq_len*1*param->numBitInput/(bufferOutputNM->numDff));
+			bufferInputNM->CalculatePower(seq_len*1*param->numBitInput/(bufferInputNM->numDff), bufferInputNM->numDff, false);
+			bufferOutputNM->CalculatePower(seq_len*1*param->numBitInput/(bufferOutputNM->numDff), bufferOutputNM->numDff, false);
 			
-			busInputNM->CalculateLatency(input_len*1*param->numBitInput/(busInputNM->busWidth)); 
-			busInputNM->CalculatePower(busInputNM->busWidth, input_len*1*param->numBitInput/(busInputNM->busWidth));
+			busInputNM->CalculateLatency(seq_len*1*param->numBitInput/(busInputNM->busWidth)); 
+			busInputNM->CalculatePower(busInputNM->busWidth, seq_len*1*param->numBitInput/(busInputNM->busWidth));
 			
 			if (param->parallelRead) {
-				busOutputNM->CalculateLatency((input_len*1*log2((double)param->levelOutput))/(busOutputNM->numRow*busOutputNM->busWidth));
-				busOutputNM->CalculatePower(busOutputNM->numRow*busOutputNM->busWidth, (input_len*1*log2((double)param->levelOutput))/(busOutputNM->numRow*busOutputNM->busWidth));
+				busOutputNM->CalculateLatency((seq_len*1*log2((double)param->levelOutput))/(busOutputNM->numRow*busOutputNM->busWidth));
+				busOutputNM->CalculatePower(busOutputNM->numRow*busOutputNM->busWidth, (seq_len*1*log2((double)param->levelOutput))/(busOutputNM->numRow*busOutputNM->busWidth));
 			} else {
 				busOutputNM->CalculateLatency((weightMatrixCol/param->numColPerSynapse*(log2((double)param->numRowSubArray)+param->cellBit-1)*numInVector/param->numBitInput)/(busOutputNM->numRow*busOutputNM->busWidth));
 				busOutputNM->CalculatePower(busOutputNM->numRow*busOutputNM->busWidth, (weightMatrixCol/param->numColPerSynapse*(log2((double)param->numRowSubArray)+param->cellBit-1)*numInVector/param->numBitInput)/(busOutputNM->numRow*busOutputNM->busWidth));

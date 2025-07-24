@@ -702,9 +702,9 @@ double ChipCalculatePerformance(InputParameter& inputParameter, Technology& tech
 		double tileEnergyAccum = 0;
 		double tileEnergyOther = 0;
 
-		int tile_allocated = 2;
+		double tile_allocated = MAX(double(param->num_tiles)*param->scale,param->num_tiles); //channel级别采用scale的方式计算
 
-		for(int i =0;i<tile_allocated;i++){
+		
 			//Tile之间是完全并行的
 
 			TileCalculatePerformance(newMemory, newMemory, inputVector, 1, 0, 0, 1, 1,
@@ -727,11 +727,21 @@ double ChipCalculatePerformance(InputParameter& inputParameter, Technology& tech
 			*coreEnergyAccum += tileEnergyAccum;
 			*coreEnergyOther += tileEnergyOther;
 			
+		//能耗需要按比例scale
+		*readDynamicEnergy*=tile_allocated;
+		
+		*bufferDynamicEnergy*=tile_allocated;
+		
+		*icDynamicEnergy*=tile_allocated;
+		
+		*coreEnergyADC*=tile_allocated;
+		*coreEnergyAccum*=tile_allocated;
+		*coreEnergyOther*=tile_allocated;
 
-		}
+		
 
 		int input_len = 1;
-		int num_head = 2; //每个channel内部有2个head
+		int num_head = ceil(param->num_PEs/param->pe_per_head)*tile_allocated; 
 
 		double numBitToLoadOut,numBitToLoadIn;	//TODO CHannel层的IC延迟异常高
 

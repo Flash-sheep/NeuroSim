@@ -91,11 +91,25 @@ public:
 
 	double v_on, v_off, v_nor;
 
-	int n_heads,d_head;
+	int n_heads,d_head, n_dec;
 
 	int count;
 
 	int channel_count, tile_count,PE_count, AG_count, subarray_count;
+
+	int seq_len;
+
+	std::string outputFileName;
+
+	int channel_allocated,tile_allocated,pe_allocated,ag_allocated
+	;
+
+	int heads_per_tile;
+
+	double scale;
+
+	int pe_per_head;
+
 };
 
 #endif

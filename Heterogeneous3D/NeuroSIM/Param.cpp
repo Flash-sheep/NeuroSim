@@ -68,6 +68,7 @@ Param::Param() {
 
 	debug = 1;
 
+	
 
 	/***************************************** user defined design options and parameters *****************************************/
 	digital = 1;				// 0: analog computing

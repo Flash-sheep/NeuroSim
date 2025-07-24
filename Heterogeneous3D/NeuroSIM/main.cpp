@@ -79,9 +79,51 @@ int main(int argc, char * argv[]) {
 		param->temp = atoi(argv[4]);                    // chip operation temperature
 	}
 	else{
-		param->synapseBit = 16;              // precision of synapse weight
-		param->numBitInput = 16;             // precision of input neural activation
+		param->d_head = atoi(argv[1]); // length of head
+		param->n_heads = atoi(argv[2]); // number of heads in each channel
+		param->seq_len = atoi(argv[3]); // sequence length
+		param->n_dec = atoi(argv[4]); // number of decoder layers
+		param->synapseBit = atoi(argv[5])*8;              // precision of synapse weight
+		param->numBitInput = param->synapseBit;
+		param->outputFileName = argv[6]; // output file name
+		param->debug = atoi(argv[7]); // debug mode
+		
 		param->temp = 300;                    // chip operation temperature
+
+
+		// double scale; //如果当前需要处理的head数量超出满载数量，考虑按照该比例进行延迟和能耗的放大
+
+		int PE_nums = param->num_PEs*param->num_tiles*param->num_channels;//总pe数量
+		int tile_nums = param->num_tiles*param->num_channels;
+		int PE_per_head;
+
+		param->channel_allocated = (param->n_heads>param->num_channels)?param->num_channels:param->n_heads; //head数量超过通道数量时，按照通道数量分配
+
+
+		switch (param->n_dec)
+		{
+		case 32:
+			// llama2-7B
+		 	PE_per_head = 2; //每个head的KV占据2个PE
+			param->scale = ((double)(param->n_heads * PE_per_head)/double(PE_nums));
+			
+			break;
+
+		case 40:
+			PE_per_head = 3; //每个head的KV占据3个PE
+			param->scale = ((double)(param->n_heads * PE_per_head)/double(PE_nums));
+			break;
+
+		case 80:
+			PE_per_head = 5; //每个head的KV占据5个PE
+			param->scale = ((double)(param->n_heads * PE_per_head)/double(PE_nums));
+			break;
+		
+		default:
+			break;
+		}
+
+		param->pe_per_head = PE_per_head; //每个head占据的PE数量
 	}
 	
 
@@ -210,7 +252,7 @@ int main(int argc, char * argv[]) {
 		chipAreaOther = chipAreaResults[4];
 		chipAreaArray = chipAreaResults[5];
 		
-		cout<<"2D ChipArea is: "<<chipArea*1e6<<"mm^2"<<endl;
+		if(param->debug) cout<<"2D ChipArea is: "<<chipArea*1e6<<"mm^2"<<endl;
 		
 		double tsvArea = 0;
 		vector<int> tierLocationEachLayer;
@@ -297,28 +339,32 @@ int main(int argc, char * argv[]) {
 				
 				chipArea = tsvArea+ MAX(chipAreaArray, chipArea-chipAreaArray);
 				chipAreaIC *= chipArea/chip2DArea;
-				cout<<"-----------------Whole area composition------------"<<endl;
-				cout << "tsv area is: "<<tsvArea*1e6<<"mm^2"<<endl;
-				cout << "ChipArea array is: "<<chipAreaArray*1e6<<"mm^2"<<endl;
-				cout << "Chip 2D area is: "<<chip2DArea*1e6<<"mm^2"<<endl;
-				cout << "Chip 3D area is: "<<chipArea*1e6<<"mm^2"<<endl;
-				
-				cout << "------------------------------ Heterogeneous 3D FloorPlan --------------------------------" <<  endl;
-				cout << endl;
-				cout << "For layer-by-layer scheme, we assumed multiple memory tiers (like memory cube) on top of a logic tier (at bottom)" << endl;
-				cout << endl;
-				cout << "User-defined SubArray Size: " << param->numRowSubArray << "x" << param->numColSubArray << endl;
-				cout << endl;
-				cout << "Number of Memory tier is: "<<param->numMemTier<<endl;
-				cout << "Tile for each Memory tier: "<<desiredNumTileNM<<endl;
-				cout << "PE for each Tile: "<<numPENM<<endl;
-				cout << "Subarrays for each PE: "<<pow(desiredPESizeNM/(double)param->numColSubArray,2)<<endl;
 
+				if(param->debug){
+					cout<<"-----------------Whole area composition------------"<<endl;
+					cout << "tsv area is: "<<tsvArea*1e6<<"mm^2"<<endl;
+					cout << "ChipArea array is: "<<chipAreaArray*1e6<<"mm^2"<<endl;
+					cout << "Chip 2D area is: "<<chip2DArea*1e6<<"mm^2"<<endl;
+					cout << "Chip 3D area is: "<<chipArea*1e6<<"mm^2"<<endl;
+					
+					cout << "------------------------------ Heterogeneous 3D FloorPlan --------------------------------" <<  endl;
+					cout << endl;
+					cout << "For layer-by-layer scheme, we assumed multiple memory tiers (like memory cube) on top of a logic tier (at bottom)" << endl;
+					cout << endl;
+					cout << "User-defined SubArray Size: " << param->numRowSubArray << "x" << param->numColSubArray << endl;
+					cout << endl;
+					cout << "Number of Memory tier is: "<<param->numMemTier<<endl;
+					cout << "Tile for each Memory tier: "<<desiredNumTileNM<<endl;
+					cout << "PE for each Tile: "<<numPENM<<endl;
+					cout << "Subarrays for each PE: "<<pow(desiredPESizeNM/(double)param->numColSubArray,2)<<endl;
+
+					
+					cout << "---------------------------- Heterogeneous 3D FloorPlan Done ------------------------------" <<  endl;
+					cout << endl;
+					cout << endl;
+					cout << endl;
+				}
 				
-				cout << "---------------------------- Heterogeneous 3D FloorPlan Done ------------------------------" <<  endl;
-				cout << endl;
-				cout << endl;
-				cout << endl;
 			}
 				
 			
@@ -419,7 +465,7 @@ int main(int argc, char * argv[]) {
 			}
 		}
 
-		cout << "-------------------------------------- Hardware Performance --------------------------------------" <<  endl;	
+		if(param->debug) cout << "-------------------------------------- Hardware Performance --------------------------------------" <<  endl;	
 
 		if (param->digital){
 			//TODO 这里需要设置如何进行调用，实现模拟的上层代码
@@ -461,6 +507,29 @@ int main(int argc, char * argv[]) {
 				chipEnergyAccum += coreEnergyAccum;
 				chipEnergyOther += coreEnergyOther;
 				
+			}
+
+			if(param->scale>1){
+				//当head数量超出系统承受范围时，需要考虑进行scale。目前采用简单的考虑策略
+				chipReadLatency *= param->scale;
+				chipReadDynamicEnergy *= param->scale;
+				chipbufferLatency *= param->scale;
+				chipbufferReadDynamicEnergy *= param->scale;
+				chipicLatency *= param->scale;
+				chipicReadDynamicEnergy *= param->scale;
+				
+				chipLatencyADC *= param->scale;
+				chipLatencyAccum *= param->scale;
+				chipLatencyOther *= param->scale;
+				
+				chipEnergyADC *= param->scale;
+				chipEnergyAccum *= param->scale;
+				chipEnergyOther *= param->scale;
+			}
+
+			if(!param->debug) {
+				cout<<"totallatency is: "<<chipReadLatency<<endl;
+				cout<<"totalenergy is: "<<chipReadDynamicEnergy*1e12<<endl;
 			}
 			
 		}
@@ -635,13 +704,15 @@ int main(int argc, char * argv[]) {
 		}
 		
 		
-			cout << "------------------------------ Summary --------------------------------" <<  endl;
+			if(param->debug) cout << "------------------------------ Summary --------------------------------" <<  endl;
 			cout << endl;
 			if (param->H3D) {
-				cout << (param->numMemTier+1) << "-Tier Chip Area : " << chipArea*1e6 << "mm^2" << endl;
-				cout << (param->numMemTier) << "-Tier Memory Cube Area : " << chipAreaArray*1e6 << "mm^2" << endl;
-				cout << "Shrinked IC Area : " << chipAreaIC*1e6 << "mm^2" << endl;
-				cout << endl;
+				if(param->debug){
+					cout << (param->numMemTier+1) << "-Tier Chip Area : " << chipArea*1e6 << "mm^2" << endl;
+					cout << (param->numMemTier) << "-Tier Memory Cube Area : " << chipAreaArray*1e6 << "mm^2" << endl;
+					cout << "Shrinked IC Area : " << chipAreaIC*1e6 << "mm^2" << endl;
+					cout << endl;
+				}
 			} else {
 				cout << "ChipArea : " << chipArea*1e12 << "um^2" << endl;
 				cout << "Chip total CIM array : " << chipAreaArray*1e12 << "um^2" << endl;
@@ -651,43 +722,48 @@ int main(int argc, char * argv[]) {
 				cout << "Other Peripheries (e.g. decoders, mux, switchmatrix, buffers, pooling and activation units) : " << chipAreaOther*1e12 << "um^2" << endl;
 				cout << endl;
 			}
-			if (! param->pipeline) {
-				if (param->synchronous) cout << "Chip clock period is: " << clkPeriod*1e9 << "ns" <<endl;
-				cout << "Chip layer-by-layer readLatency (per token per decoder) is: " << chipReadLatency*1e9 << "ns" << endl;
-				cout << "Chip total readDynamicEnergy is: " << chipReadDynamicEnergy*1e12 << "pJ" << endl;
-				cout << "Chip Average Power is: "<<chipReadDynamicEnergy*1e12/(chipReadLatency*1e12) << "W" << endl;
+			
+			if(param->debug)
+				if (! param->pipeline) {
+					if (param->synchronous) cout << "Chip clock period is: " << clkPeriod*1e9 << "ns" <<endl;
+					cout << "Chip layer-by-layer readLatency (per token per decoder) is: " << chipReadLatency*1e9 << "ns" << endl;
+					cout << "Chip total readDynamicEnergy is: " << chipReadDynamicEnergy*1e12 << "pJ" << endl;
+					cout << "Chip Average Power is: "<<chipReadDynamicEnergy*1e12/(chipReadLatency*1e12) << "W" << endl;
 
-				cout << "Chip buffer readLatency is: " << chipbufferLatency*1e9 << "ns" << endl;
-				cout << "Chip buffer readDynamicEnergy is: " << chipbufferReadDynamicEnergy*1e12 << "pJ" << endl;
-				cout << "Chip buffer Power is: "<<chipbufferReadDynamicEnergy*1e12/(chipbufferLatency*1e12) << "W" << endl;
+					cout << "Chip buffer readLatency is: " << chipbufferLatency*1e9 << "ns" << endl;
+					cout << "Chip buffer readDynamicEnergy is: " << chipbufferReadDynamicEnergy*1e12 << "pJ" << endl;
+					cout << "Chip buffer Power is: "<<chipbufferReadDynamicEnergy*1e12/(chipbufferLatency*1e12) << "W" << endl;
 
-				cout << "Chip ic readLatency is: " << chipicLatency*1e9 << "ns" << endl;
-				cout << "Chip ic readDynamicEnergy is: " << chipicReadDynamicEnergy*1e12 << "pJ" << endl;
-				cout << "Chip ic Power is: "<<chipicReadDynamicEnergy*1e12/(chipicLatency*1e12) << "W" << endl;
-			} else {
-				if (param->synchronous) cout << "Chip clock period is: " << clkPeriod*1e9 << "ns" <<endl;
-				cout << "Chip pipeline-system-clock-cycle (per image) is: " << chipReadLatency*1e9 << "ns" << endl;
-				cout << "Chip pipeline-system readDynamicEnergy (per image) is: " << chipReadDynamicEnergy*1e12 << "pJ" << endl;
-				cout << "Chip pipeline-system leakage Energy (per image) is: " << chipLeakageEnergy*1e12 << "pJ" << endl;
-				cout << "Chip pipeline-system leakage Power (per image) is: " << chipLeakage*1e6 << "uW" << endl;
-				cout << "Chip pipeline-system buffer readLatency (per image) is: " << chipbufferLatency*1e9 << "ns" << endl;
-				cout << "Chip pipeline-system buffer readDynamicEnergy (per image) is: " << chipbufferReadDynamicEnergy*1e12 << "pJ" << endl;
-				cout << "Chip pipeline-system ic readLatency (per image) is: " << chipicLatency*1e9 << "ns" << endl;
-				cout << "Chip pipeline-system ic readDynamicEnergy (per image) is: " << chipicReadDynamicEnergy*1e12 << "pJ" << endl;
+					cout << "Chip ic readLatency is: " << chipicLatency*1e9 << "ns" << endl;
+					cout << "Chip ic readDynamicEnergy is: " << chipicReadDynamicEnergy*1e12 << "pJ" << endl;
+					cout << "Chip ic Power is: "<<chipicReadDynamicEnergy*1e12/(chipicLatency*1e12) << "W" << endl;
+				} else {
+					if (param->synchronous) cout << "Chip clock period is: " << clkPeriod*1e9 << "ns" <<endl;
+					cout << "Chip pipeline-system-clock-cycle (per image) is: " << chipReadLatency*1e9 << "ns" << endl;
+					cout << "Chip pipeline-system readDynamicEnergy (per image) is: " << chipReadDynamicEnergy*1e12 << "pJ" << endl;
+					cout << "Chip pipeline-system leakage Energy (per image) is: " << chipLeakageEnergy*1e12 << "pJ" << endl;
+					cout << "Chip pipeline-system leakage Power (per image) is: " << chipLeakage*1e6 << "uW" << endl;
+					cout << "Chip pipeline-system buffer readLatency (per image) is: " << chipbufferLatency*1e9 << "ns" << endl;
+					cout << "Chip pipeline-system buffer readDynamicEnergy (per image) is: " << chipbufferReadDynamicEnergy*1e12 << "pJ" << endl;
+					cout << "Chip pipeline-system ic readLatency (per image) is: " << chipicLatency*1e9 << "ns" << endl;
+					cout << "Chip pipeline-system ic readDynamicEnergy (per image) is: " << chipicReadDynamicEnergy*1e12 << "pJ" << endl;
+				}
+			
+			if(param->debug){
+				cout << endl;
+				cout << "************************ Breakdown of Latency and Dynamic Energy *************************" << endl;
+				cout << endl;
+				cout << "----------- ADC (or S/As and precharger for SRAM) readLatency is : " << chipLatencyADC*1e9 << "ns" << endl;
+				cout << "----------- Accumulation Circuits (subarray level: adders, shiftAdds; PE/Tile/Global level: accumulation units) readLatency is : " << chipLatencyAccum*1e9 << "ns" << endl;
+				cout << "----------- Other Peripheries (e.g. decoders, mux, switchmatrix, buffers, IC, pooling and activation units) readLatency is : " << chipLatencyOther*1e9 << "ns" << endl;
+				cout << "----------- ADC (or S/As and precharger for SRAM) readDynamicEnergy is : " << chipEnergyADC*1e12 << "pJ" << endl;
+				cout << "----------- Accumulation Circuits (subarray level: adders, shiftAdds; PE/Tile/Global level: accumulation units) readDynamicEnergy is : " << chipEnergyAccum*1e12 << "pJ" << endl;
+				cout << "----------- Other Peripheries (e.g. decoders, mux, switchmatrix, buffers, IC, pooling and activation units) readDynamicEnergy is : " << chipEnergyOther*1e12 << "pJ" << endl;
+				cout << endl;
+				cout << "************************ Breakdown of Latency and Dynamic Energy *************************" << endl;
+				cout << endl;
 			}
 			
-			cout << endl;
-			cout << "************************ Breakdown of Latency and Dynamic Energy *************************" << endl;
-			cout << endl;
-			cout << "----------- ADC (or S/As and precharger for SRAM) readLatency is : " << chipLatencyADC*1e9 << "ns" << endl;
-			cout << "----------- Accumulation Circuits (subarray level: adders, shiftAdds; PE/Tile/Global level: accumulation units) readLatency is : " << chipLatencyAccum*1e9 << "ns" << endl;
-			cout << "----------- Other Peripheries (e.g. decoders, mux, switchmatrix, buffers, IC, pooling and activation units) readLatency is : " << chipLatencyOther*1e9 << "ns" << endl;
-			cout << "----------- ADC (or S/As and precharger for SRAM) readDynamicEnergy is : " << chipEnergyADC*1e12 << "pJ" << endl;
-			cout << "----------- Accumulation Circuits (subarray level: adders, shiftAdds; PE/Tile/Global level: accumulation units) readDynamicEnergy is : " << chipEnergyAccum*1e12 << "pJ" << endl;
-			cout << "----------- Other Peripheries (e.g. decoders, mux, switchmatrix, buffers, IC, pooling and activation units) readDynamicEnergy is : " << chipEnergyOther*1e12 << "pJ" << endl;
-			cout << endl;
-			cout << "************************ Breakdown of Latency and Dynamic Energy *************************" << endl;
-			cout << endl;
 			
 			
 			
@@ -703,13 +779,16 @@ int main(int argc, char * argv[]) {
 			fps = 1/(chipReadLatency);
 			topsmm = numComputation/(chipReadLatency*1e12)/(chipArea*1e6);
 			
-			cout << "Chip Operation Temperature (K): " << param->temp << endl;
+			if(param->debug) cout<< "Chip Operation Temperature (K): " << param->temp << endl;
 			if (! param->pipeline) {
-				cout << "Energy Efficiency TOPS/W (Layer-by-Layer Process): " << topsW << endl;
-				cout << "Throughput TOPS (Layer-by-Layer Process): " << tops << endl;
-				cout << "Throughput FPS (Layer-by-Layer Process): " << fps << endl;
-				cout << "Compute efficiency TOPS/mm^2 (Layer-by-Layer Process): " << topsmm << endl;
-				cout << "Power Density W/mm^2 (Layer-by-Layer Process): " << powerDensity << endl;	
+				if(!param->digital){
+					cout << "Energy Efficiency TOPS/W (Layer-by-Layer Process): " << topsW << endl;
+					cout << "Throughput TOPS (Layer-by-Layer Process): " << tops << endl;
+					cout << "Throughput FPS (Layer-by-Layer Process): " << fps << endl;
+					cout << "Compute efficiency TOPS/mm^2 (Layer-by-Layer Process): " << topsmm << endl;
+					cout << "Power Density W/mm^2 (Layer-by-Layer Process): " << powerDensity << endl;
+				}
+					
 			} else {
 				cout << "Energy Efficiency TOPS/W (Pipelined Process): " << topsW << endl;
 				cout << "Throughput TOPS (Pipelined Process): " << tops << endl;
@@ -718,30 +797,32 @@ int main(int argc, char * argv[]) {
 				cout << "Power Density W/mm^2 (Pipelined Process): " << powerDensity << endl;	
 			}
 			
-			cout << "-------------------------------------- Hardware Performance Done --------------------------------------" <<  endl;
-			cout << endl;
-			auto stop = chrono::high_resolution_clock::now();
-			auto duration = chrono::duration_cast<chrono::seconds>(stop-start);
-			cout << "------------------------------ Simulation Performance --------------------------------" <<  endl;
-			cout << "Total Run-time of NeuroSim: " << duration.count() << " seconds" << endl;
-			cout << "------------------------------ Simulation Performance --------------------------------" <<  endl;
+			// cout << "-------------------------------------- Hardware Performance Done --------------------------------------" <<  endl;
+			// cout << endl;
+			// auto stop = chrono::high_resolution_clock::now();
+			// auto duration = chrono::duration_cast<chrono::seconds>(stop-start);
+			// cout << "------------------------------ Simulation Performance --------------------------------" <<  endl;
+			// cout << "Total Run-time of NeuroSim: " << duration.count() << " seconds" << endl;
+			// cout << "------------------------------ Simulation Performance --------------------------------" <<  endl;
 			
 			
-			// save results to top level csv file (only total results)
-			ofstream outfile;
-			outfile.open ("Area_PowerDensity.csv", ios::app);
-			if (outfile.is_open()) {
-				outfile << chipArea << "," << powerDensity << endl;
-			} else {
-				cout << "Error: the output file cannot be opened!" << endl;
-			}
-			outfile.close();
+			// // save results to top level csv file (only total results)
+			// ofstream outfile;
+			// outfile.open ("Area_PowerDensity.csv", ios::app);
+			// if (outfile.is_open()) {
+			// 	outfile << chipArea << "," << powerDensity << endl;
+			// } else {
+			// 	cout << "Error: the output file cannot be opened!" << endl;
+			// }
+			// outfile.close();
 			
 	} else {
 		cout << "------------------------------------------------------------------------------------------" <<  endl;
 		cout << "As pipeline system need more comprehensive floorplan, currently we do not support <pipelined H3D> under auto-floorplan scheme" <<  endl;
 		cout << "------------------------------------------------------------------------------------------" <<  endl;
 	}
+
+	
 	
 	return 0;
 }
