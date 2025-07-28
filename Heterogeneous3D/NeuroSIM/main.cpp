@@ -81,12 +81,13 @@ int main(int argc, char * argv[]) {
 	else{
 		param->d_head = atoi(argv[1]); // length of head
 		param->n_heads = atoi(argv[2]); // number of heads in each channel
-		param->seq_len = atoi(argv[3]); // sequence length
+		param->start_seq_len = atoi(argv[3]); // sequence length
 		param->n_dec = atoi(argv[4]); // number of decoder layers
 		param->synapseBit = atoi(argv[5])*8;              // precision of synapse weight
 		param->numBitInput = param->synapseBit;
 		param->outputFileName = argv[6]; // output file name
 		param->debug = atoi(argv[7]); // debug mode
+		param->end_seq_len = atoi(argv[8]); 
 		
 		param->temp = 300;                    // chip operation temperature
 
@@ -97,7 +98,7 @@ int main(int argc, char * argv[]) {
 		int tile_nums = param->num_tiles*param->num_channels;
 		int PE_per_head;
 
-		param->channel_allocated = (param->n_heads>param->num_channels)?param->num_channels:param->n_heads; //head数量超过通道数量时，按照通道数量分配
+		param->channel_allocated = MIN(param->num_channels,param->n_heads); //head数量超过通道数量时，按照通道数量分配
 
 
 		switch (param->n_dec)
@@ -112,6 +113,7 @@ int main(int argc, char * argv[]) {
 		case 40:
 			PE_per_head = 3; //每个head的KV占据3个PE
 			param->scale = ((double)(param->n_heads * PE_per_head)/double(PE_nums));
+			cout<<param->scale<<endl;
 			break;
 
 		case 80:
@@ -465,9 +467,13 @@ int main(int argc, char * argv[]) {
 			}
 		}
 
+
+		auto area_initial = chrono::high_resolution_clock::now();
 		if(param->debug) cout << "-------------------------------------- Hardware Performance --------------------------------------" <<  endl;	
 
 		if (param->digital){
+
+			for(param->seq_len = param->start_seq_len;param->seq_len<=param->end_seq_len;param->seq_len++){
 			//TODO 这里需要设置如何进行调用，实现模拟的上层代码
 			//1、在chip层面一次调用是进行一个memory die的管理，但是如何进行channel级别的管理
 			//2、需要存储每个周期的内存分配情况和映射情况，在后续根据算法进行分配
@@ -478,12 +484,45 @@ int main(int argc, char * argv[]) {
 			//7、在Array group层面，是按照array group的维度进行并行的，
 			
 			//当前分配16个channel，每个channel分配2个head
-			int channel_allocated = 16;
+			clkPeriod = 0;
+			layerclkPeriod = 0;
+			
+			chipReadLatency = 0;
+			chipReadDynamicEnergy = 0;
+			chipLeakageEnergy = 0;
+			chipLeakage = 0;
+			chipbufferLatency = 0;
+			chipbufferReadDynamicEnergy = 0;
+			chipicLatency = 0;
+			chipicReadDynamicEnergy = 0;
+			
+			chipLatencyADC = 0;
+			chipLatencyAccum = 0;
+			chipLatencyOther = 0;
+			chipEnergyADC = 0;
+			chipEnergyAccum = 0;
+			chipEnergyOther = 0;
+			
+			layerReadLatency = 0;
+			layerReadDynamicEnergy = 0;
+			tileLeakage = 0;
+			layerbufferLatency = 0;
+			layerbufferDynamicEnergy = 0;
+			layericLatency = 0;
+			layericDynamicEnergy = 0;
+			
+			coreLatencyADC = 0;
+			coreLatencyAccum = 0;
+			coreLatencyOther = 0;
+			coreEnergyADC = 0;
+			coreEnergyAccum = 0;
+			coreEnergyOther = 0;
+			int channel_allocated = param->channel_allocated;
 
-			for(int i = 0; i<channel_allocated;i++){
+			
 				
 				const string fake_file = "fake";
-
+				
 				ChipCalculatePerformance(inputParameter, tech, cell, 0, fake_file, fake_file, fake_file, 0,
 							netStructure, markNM, numTileEachLayer, utilizationEachLayer, speedUpEachLayer, tileLocaEachLayer, tierLocationEachLayer,
 							numPENM, desiredPESizeNM, desiredTileSizeCM, desiredPESizeCM, CMTileheight, CMTilewidth, NMTileheight, NMTilewidth,
@@ -491,23 +530,23 @@ int main(int argc, char * argv[]) {
 							&coreLatencyADC, &coreLatencyAccum, &coreLatencyOther, &coreEnergyADC, &coreEnergyAccum, &coreEnergyOther, false, &layerclkPeriod);
 				
 				chipReadLatency = MAX(layerReadLatency,chipReadLatency);
-				chipReadDynamicEnergy += layerReadDynamicEnergy;
+				chipReadDynamicEnergy += layerReadDynamicEnergy*channel_allocated;
 
 				chipbufferLatency = MAX(layerbufferLatency,chipbufferLatency);
-				chipbufferReadDynamicEnergy += layerbufferDynamicEnergy;
+				chipbufferReadDynamicEnergy += layerbufferDynamicEnergy*channel_allocated;
 
 				chipicLatency = MAX(layericLatency,chipicLatency);
-				chipicReadDynamicEnergy += layericDynamicEnergy;
+				chipicReadDynamicEnergy += layericDynamicEnergy*channel_allocated;
 				
 				chipLatencyADC = MAX(coreLatencyADC,chipLatencyADC);
 				chipLatencyAccum = MAX(coreLatencyAccum,chipLatencyAccum);
 				chipLatencyOther = MAX(coreLatencyOther,chipLatencyOther);
 				
-				chipEnergyADC += coreEnergyADC;
-				chipEnergyAccum += coreEnergyAccum;
-				chipEnergyOther += coreEnergyOther;
+				chipEnergyADC += coreEnergyADC*channel_allocated;
+				chipEnergyAccum += coreEnergyAccum*channel_allocated;
+				chipEnergyOther += coreEnergyOther*channel_allocated;
 				
-			}
+			
 
 			if(param->scale>1){
 				//当head数量超出系统承受范围时，需要考虑进行scale。目前采用简单的考虑策略
@@ -530,6 +569,7 @@ int main(int argc, char * argv[]) {
 			if(!param->debug) {
 				cout<<"totallatency is: "<<chipReadLatency<<endl;
 				cout<<"totalenergy is: "<<chipReadDynamicEnergy*1e12<<endl;
+			}
 			}
 			
 		}
@@ -796,7 +836,12 @@ int main(int argc, char * argv[]) {
 				cout << "Compute efficiency TOPS/mm^2 (Pipelined Process): " << topsmm << endl;
 				cout << "Power Density W/mm^2 (Pipelined Process): " << powerDensity << endl;	
 			}
-			
+			auto end = chrono::high_resolution_clock::now();
+
+			auto area_duration = chrono::duration_cast<chrono::seconds>(area_initial-start);
+			auto perf_duration = chrono::duration_cast<chrono::seconds>(end-area_initial);
+			if(!param->debug) cout << "Area Calculation Performance: " << area_duration.count() << " seconds" << endl;
+			cout << "Performance Calculation Performance: " << perf_duration.count() << " seconds" <<endl;
 			// cout << "-------------------------------------- Hardware Performance Done --------------------------------------" <<  endl;
 			// cout << endl;
 			// auto stop = chrono::high_resolution_clock::now();

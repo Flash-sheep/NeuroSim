@@ -421,35 +421,34 @@ void TileCalculatePerformance(const vector<vector<double> > &newMemory, const ve
 	if(param->digital){
 		// 目前一个Tile的大小设置为了256MB，能够放置8个head按照空闲分配策略下，一个Tile只会放置一个head，每个channel放置2个head
 		int num_tile_allocated = 1;
-		int num_pe_allocated = MAX(ceil(param->num_PEs*param->scale),param->num_PEs); //按照最大分配数来计算
+		int num_pe_allocated = MIN(ceil(param->num_PEs*param->scale),param->num_PEs); //按照最大分配数来计算
 		int conflict_time = 1; //当一个PE内存储了多个head时，可能会出现冲突 TODO这一段延时可以由PE自行感知，在Tile层面不会有冲突
 
 		vector<vector<double>> fake_memory;
 		vector<vector<double>> fake_input;
 		
-		for(int i =0;i<num_pe_allocated;i++){
+		
 			//依次获取延时并取最大，依次获取能耗并叠加
 			ProcessingUnitCalculatePerformance(subArrayInPE, fake_memory, fake_memory, fake_input, ceil((double)speedUpRow/(double)numPE), ceil((double)speedUpCol/(double)numPE), 
 											numSubArrayRow, numSubArrayCol, weightMatrixRow, weightMatrixCol, numInVector, cell, true,
 											&PEreadLatency, &PEreadDynamicEnergy, &PEleakage,
 											&PEbufferLatency, &PEbufferDynamicEnergy, &PEicLatency, &PEicDynamicEnergy,
 											&peLatencyADC, &peLatencyAccum, &peLatencyOther, &peEnergyADC, &peEnergyAccum, &peEnergyOther, CalculateclkFreq, clkPeriod);
-			*readLatency = MAX(PEreadLatency*2, (*readLatency)); //TODO考虑到需要依次计算KV在Tile层将pe的延迟翻倍
-			*readDynamicEnergy += PEreadDynamicEnergy;
+			*readLatency = PEreadLatency*2; //TODO考虑到需要依次计算KV在Tile层将pe的延迟翻倍
+			*readDynamicEnergy = PEreadDynamicEnergy*num_pe_allocated;
 			*bufferLatency = MAX(PEbufferLatency*2, (*bufferLatency));
-			*bufferDynamicEnergy += PEbufferDynamicEnergy;
+			*bufferDynamicEnergy = PEbufferDynamicEnergy*num_pe_allocated;
 			*icLatency = MAX(PEicLatency*2,(*icLatency));
-			*icDynamicEnergy += PEicDynamicEnergy;
+			*icDynamicEnergy = PEicDynamicEnergy*num_pe_allocated;
 			
 			*coreLatencyADC = MAX(peLatencyADC*2, (*coreLatencyADC));
 			*coreLatencyAccum = MAX(peLatencyAccum*2, (*coreLatencyAccum));
 			*coreLatencyOther = MAX(peLatencyOther*2, (*coreLatencyOther));
 			
-			*coreEnergyADC += peEnergyADC;
-			*coreEnergyAccum += peEnergyAccum;
-			*
-			coreEnergyOther += peEnergyOther;
-		}
+			*coreEnergyADC += peEnergyADC*num_pe_allocated;
+			*coreEnergyAccum += peEnergyAccum*num_pe_allocated;
+			*coreEnergyOther += peEnergyOther*num_pe_allocated;
+		
 		
 		// int accum_tile = 1; //TODO Tile层面一般情况下不需要accum，因为是按照decoder进行拆分的
 		// int accum_bit = 1;

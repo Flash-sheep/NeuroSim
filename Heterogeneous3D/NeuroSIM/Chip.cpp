@@ -702,7 +702,7 @@ double ChipCalculatePerformance(InputParameter& inputParameter, Technology& tech
 		double tileEnergyAccum = 0;
 		double tileEnergyOther = 0;
 
-		double tile_allocated = MAX(double(param->num_tiles)*param->scale,param->num_tiles); //channel级别采用scale的方式计算
+		double tile_allocated = MIN(double(param->num_tiles)*param->scale,param->num_tiles); //channel级别采用scale的方式计算
 
 		
 			//Tile之间是完全并行的

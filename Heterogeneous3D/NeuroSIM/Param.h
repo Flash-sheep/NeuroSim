@@ -97,7 +97,7 @@ public:
 
 	int channel_count, tile_count,PE_count, AG_count, subarray_count;
 
-	int seq_len;
+	int seq_len,start_seq_len, end_seq_len;
 
 	std::string outputFileName;
 
@@ -109,6 +109,7 @@ public:
 	double scale;
 
 	int pe_per_head;
+
 
 };
 
